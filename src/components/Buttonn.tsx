@@ -6,11 +6,11 @@ import {
   ActivityIndicator,
   ViewStyle
 } from 'react-native';
-import { Shadow } from 'react-native-shadow-2';
 
 interface ButtonProps {
   title: string;
-  style?: ViewStyle; // Melhor usar ViewStyle em vez de any para melhor suporte do TS
+  style?: ViewStyle;
+  textStyle?: any;
   onPress: () => void;
   isLoading?: boolean;
   disabled?: boolean;
@@ -18,7 +18,8 @@ interface ButtonProps {
 
 export function Button({ 
   title, 
-  style, 
+  style,
+  textStyle, 
   onPress, 
   isLoading = false, 
   disabled = false 
@@ -28,32 +29,26 @@ export function Button({
 
   return (
     
-    <Shadow 
-      distance={8} 
-      startColor={"#59748c90"}
-      offset={[0, 3]} 
-      stretch={true}
-      disabled={isButtonDisabled}
-      containerStyle={style}
-    >
+    
       <TouchableOpacity 
         onPress={onPress} 
         disabled={isButtonDisabled}
         activeOpacity={0.8}
         style={[
           styles.button, 
-          isButtonDisabled && styles.disabled
+          isButtonDisabled && styles.disabled,
+          style
         ]}
       >
         {isLoading ? (
           <ActivityIndicator color="#FFFFFF" />
         ) : (
-          <Text style={styles.text}>
+          <Text style={[styles.text,textStyle]}>
             {title}
           </Text>
         )}
       </TouchableOpacity>
-    </Shadow>
+    
   );
 }
 

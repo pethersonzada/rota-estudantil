@@ -130,8 +130,8 @@ const styles=StyleSheet.create({
     login:{
         marginBottom:40
     },
-    senha:{
-        marginVertical:30
+    senha:{ 
+        marginVertical:20,
     },
     button:{
         width:250,
@@ -159,6 +159,7 @@ const styles=StyleSheet.create({
         justifyContent:"space-between",
         width:"100%",
         marginTop:10,
+        paddingHorizontal:8
     },
     textRow:{
         flexDirection:"row",

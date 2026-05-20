@@ -107,7 +107,7 @@ export const AddressCard = ({ onDataChange }: any) => {
 
             <View style={styles.row}>
                 <View style={{ width: "30%" }}>
-                    <Title style={styles.subtitlerow1} text="número" />
+                    <Title style={styles.subtitlerow1} text="Número" />
                     <Input 
                         placeholder="Ex: 12" 
                         value={numero} 
@@ -166,6 +166,7 @@ export const AddressCard = ({ onDataChange }: any) => {
                                     label={item.label} 
                                     value={item.value} 
                                     color="#000"
+                                    style={styles.pickerfont}
                                 />
                             ))}
                         </Picker>
@@ -199,20 +200,20 @@ const styles = StyleSheet.create({
         marginBottom: -8,
     },
     subtitlerow1:{
-    fontSize: 20,
-    color: "#f0f9ff",
-    width: "100%",
-    paddingHorizontal:8,
-    textAlign: "left",
-    marginBottom:8
+        fontSize: 20,
+        color: "#f0f9ff",
+        width: "100%",
+        paddingHorizontal:8,
+        textAlign: "left",
+        marginBottom:8
     },
     subtitlerow2:{
-    fontSize: 20,
-    color: "#f0f9ff",
-    width: "100%",
-    paddingHorizontal:10,
-    textAlign: "left",
-    marginBottom:8
+        fontSize: 20,
+        color: "#f0f9ff",
+        width: "100%",
+        paddingHorizontal:10,
+        textAlign: "left",
+        marginBottom:8
     },
     row: {
         flexDirection: "row",
@@ -226,12 +227,18 @@ const styles = StyleSheet.create({
         height: 50,
         justifyContent: "center",
         marginBottom:5,
+        borderWidth:1,
+        borderColor:"#354c6270",
+        
+        
         
     },
     picker: {
         width: "100%",
         height: "100%",
         color: "#59748c",
-                 
+    },
+    pickerfont:{
+        fontSize:14,
     }
 });

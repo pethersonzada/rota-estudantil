@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
-// Definindo o que o componente precisa receber
 interface Props {
   opcoes: string[];
   selecionado: string;
@@ -39,7 +38,7 @@ const styles = StyleSheet.create({
     borderRadius:15,
   },
   botaoAtivo: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#f0f9ff",
   },
   texto: {
     color: "#354d62",

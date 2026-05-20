@@ -1,5 +1,5 @@
 import React from "react";
-import {Text, StyleSheet, View} from "react-native";
+import {Text, StyleSheet} from "react-native";
 
 type TitleProps={
     text:string;
@@ -19,7 +19,7 @@ const styles=StyleSheet.create({
         textShadowOffset: {width: 2, height: 2},
         textShadowRadius:5,
         textAlign:"center", 
-        width: "100%" 
+        width: "100%", 
     },
 });
 

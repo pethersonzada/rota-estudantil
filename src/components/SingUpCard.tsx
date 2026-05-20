@@ -57,7 +57,7 @@ export const SingUpCard = ({ onDataChange }: any) => {
     const usuarioFinal = {
         nome: nome.trim(),
         email: email.toLowerCase().trim(),
-        senha: senha, // Enviando a senha
+        senha: senha,
         data_nascimento: dataFormatadaBanco,
         telefone: telefoneNumeros,
         data_cadastro: new Date().toISOString()
@@ -95,7 +95,7 @@ export const SingUpCard = ({ onDataChange }: any) => {
                 secureTextEntry={true}
                 keyboardType="default"
                 autoCapitalize="none"
-                minLength={8}
+                
             />
             <Title style={styles.subtitle}text="Confirme sua senha"/>
             <Input 
@@ -107,8 +107,10 @@ export const SingUpCard = ({ onDataChange }: any) => {
                 autoCapitalize="none"
                 
             />
-            <View style={styles.rowtitle}><Title style={styles.subtitlerow}text="Data de nascimento"/>
-            <Title style={styles.subtitlerow}text="Telefone"/></View>
+            <View style={styles.rowtitle}>
+                <Title style={styles.subtitlerow1}text="Data de nascimento"/>
+                <Title style={styles.subtitlerow2}text="Telefone"/>
+            </View>
             
             <View style={styles.row}>
                 <View style={styles.halfInput}>
@@ -121,7 +123,7 @@ export const SingUpCard = ({ onDataChange }: any) => {
                         }}
                         keyboardType="numeric"
                         maxLength={10}
-                        minLength={10}
+                        
                     />
                 </View>
 
@@ -140,7 +142,7 @@ export const SingUpCard = ({ onDataChange }: any) => {
                         }}
                         keyboardType="phone-pad"
                         maxLength={15}
-                        minLength={15}
+                        
                     />
                 </View>
             </View>
@@ -162,7 +164,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 30,
         color: "#f0f9ff",
-        marginBottom: 10,
+        padding:8
     },
     subtitle:{
         fontSize:20,
@@ -170,13 +172,20 @@ const styles = StyleSheet.create({
         padding:5,
         margin:-8
     },
-    subtitlerow: {
-    fontSize: 16,
-    color: "#f0f9ff",
-    width: "50%",
-    textAlign: "left",
-    marginBottom:-5
-},
+    subtitlerow1: {
+        fontSize: 16,
+        color: "#f0f9ff",
+        width: "50%",
+        textAlign: "left",
+        marginBottom:-5,
+    },
+    subtitlerow2: {
+        fontSize: 16,
+        color: "#f0f9ff",
+        width: "50%",
+        textAlign: "left",
+        marginBottom:-5,
+    },
     row: {
         flexDirection: "row",
         justifyContent: "space-between",
@@ -186,7 +195,8 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "center",
         width: "100%",
-        gap:2
+        gap:2,
+        paddingLeft:8,
     },
     halfInput: {
         width: "48%",

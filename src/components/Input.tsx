@@ -1,6 +1,5 @@
 import React, {useState} from "react";
 import { TextInput, StyleSheet, View, TouchableOpacity } from "react-native";
-import {Shadow} from "react-native-shadow-2";
 import { Ionicons } from "@expo/vector-icons";
 type InputProps={
     placeholder:string;
@@ -12,30 +11,27 @@ type InputProps={
     autoCapitalize?:"none"|"sentences"|"words"|"characters";
     onSubmitEditing?:()=>void;
     maxLength?:number;
-    minLength?:number;
     
 };
-const Input=({placeholder, value, onChangeText, secureTextEntry, keyboardType,autoCapitalize,onSubmitEditing, style}: InputProps)=>{
+const Input=({placeholder, value, onChangeText, secureTextEntry, keyboardType,autoCapitalize,onSubmitEditing, style, maxLength}: InputProps)=>{
 
     const [escondido, setEscondido] = useState(secureTextEntry);
 
     return (
-        <Shadow distance={8}
-                startColor={"#59748c90"} 
-                offset={[0,4]} 
-                stretch={true} 
-                containerStyle={[{width:"100%"}, style]}>
+        
 
-                    <View style={styles.container}>
+                    <View style={[styles.container, style]}>
                         <TextInput
                             style={styles.input}
-                            placeholder={placeholder} placeholderTextColor={"#59748c"}
+                            placeholder={placeholder} placeholderTextColor={"#59748c60"}
                             value={value} 
                             onChangeText={onChangeText}
                             secureTextEntry={escondido}
                             keyboardType={keyboardType}
                             autoCapitalize={autoCapitalize}
                             onSubmitEditing={onSubmitEditing}
+                            maxLength={maxLength}
+                            
 
                         />
                         {secureTextEntry !== undefined && (
@@ -51,7 +47,7 @@ const Input=({placeholder, value, onChangeText, secureTextEntry, keyboardType,au
                             </TouchableOpacity>
                         )}
                     </View>
-        </Shadow>
+        
     );
 };
 
@@ -67,6 +63,8 @@ const styles=StyleSheet.create({
         overflow:"hidden",
         flexDirection: "row",
         alignItems: "center",
+        borderWidth:1,
+        borderColor:"#354c6270"      
     },
     input:{
         flex:1,

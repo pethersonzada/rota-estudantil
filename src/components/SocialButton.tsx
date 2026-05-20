@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, Image, ImageSourcePropType } from 'react-native';
-import { Shadow } from 'react-native-shadow-2';
+
 
 interface SocialButtonProps {
   title: string;
@@ -10,18 +10,12 @@ interface SocialButtonProps {
 
 export function SocialButton({ title, icon, onPress }: SocialButtonProps) {
   return (
-    <Shadow 
-      distance={5} 
-      startColor={"#59748c90"} 
-      stretch={true}
-      offset={[0, 3]} 
-      containerStyle={styles.shadowContainer}
-    >
+    
       <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.7}>
         <Image source={icon} style={styles.icon} />
         <Text style={styles.text}>{title}</Text>
       </TouchableOpacity>
-    </Shadow>
+  
   );
 }
 
@@ -49,6 +43,5 @@ const styles = StyleSheet.create({
     color: '#354d62',
     fontSize: 12,
     fontFamily: 'Lato',
-    fontWeight: '600',
   },
 });
