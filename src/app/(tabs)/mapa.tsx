@@ -4,7 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View, Alert, TouchableOpacity } fr
 import { WebView } from 'react-native-webview';
 
 // CONFIGURAÇÃO DO SERVIDOR
-const API_URL = 'https://fresh-donuts-decide.loca.lt';
+const API_URL = 'https://poor-rings-dress.loca.lt';
 const MOTORISTA_ID = 2;
 
 // ESTRUTURA DE DADOS DO PASSAGEIRO
