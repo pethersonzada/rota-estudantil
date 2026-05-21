@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const API_URL = 'https://icy-paws-pump.loca.lt';
+const API_URL = 'https://plenty-areas-know.loca.lt';
 const MOTORISTA_ID = 2;
 
 type Passageiro = {
