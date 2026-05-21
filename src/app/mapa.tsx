@@ -1,11 +1,13 @@
 import * as Location from 'expo-location';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View, Alert, TouchableOpacity } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const API_URL = 'https://plenty-areas-know.loca.lt';
+// CONFIGURAÇÃO DO SERVIDOR
+const API_URL = 'https://fresh-donuts-decide.loca.lt';
 const MOTORISTA_ID = 2;
 
+// ESTRUTURA DE DADOS DO PASSAGEIRO
 type Passageiro = {
     id: number;
     nome: string;
@@ -15,185 +17,183 @@ type Passageiro = {
 };
 
 export default function Mapa() {
+    const webViewRef = useRef<WebView>(null);
     const [localizacao, setLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
     const [rota, setRota] = useState<Passageiro[]>([]);
     const [loading, setLoading] = useState(true);
-    const [pausado, setPausado] = useState(false);
 
+    // INICIALIZAÇÃO DO GPS E CARREGAMENTO DE DADOS
     useEffect(() => {
-        inicializar();
+        const iniciarSistema = async () => {
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') {
+                    Alert.alert('Aviso', 'Permissão de localização negada pelo usuário.');
+                    return;
+                }
+
+                await Location.watchPositionAsync(
+                    { accuracy: Location.Accuracy.High, distanceInterval: 5 },
+                    (loc) => {
+                        setLocalizacao({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+                    }
+                );
+
+                await carregarRotaDoServidor();
+            } catch (error) {
+                console.error("Erro na inicialização:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        iniciarSistema();
     }, []);
 
-    async function inicializar() {
-        try {
-            console.log("[DEBUG] 1. Solicitando permissão de localização...");
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Aviso', 'Permissão de localização negada.');
-                return;
-            }
-
-            console.log("[DEBUG] 2. Buscando sinal de GPS...");
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            setLocalizacao({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-
-            console.log("[DEBUG] 3. Chamando backend para carregar rota...");
-            await carregarRota();
-        } catch (error) {
-            console.error("Erro no GPS:", error);
-            Alert.alert("Erro", "Falha ao inicializar o GPS.");
-        } finally {
-            console.log("[DEBUG] 4. Encerrando tela de loading.");
-            setLoading(false);
+    // ENVIO DA LOCALIZAÇÃO DO MOTORISTA PARA A WEBVIEW
+    useEffect(() => {
+        if (localizacao && webViewRef.current) {
+            const script = `
+                window.posicaoAtual = [${localizacao.latitude}, ${localizacao.longitude}];
+                if (typeof atualizarVan === 'function') {
+                    atualizarVan(window.posicaoAtual);
+                }
+            `;
+            webViewRef.current.injectJavaScript(script);
         }
+    }, [localizacao]);
 
-        Location.watchPositionAsync(
-            { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 5 },
-            (loc) => setLocalizacao({ latitude: loc.coords.latitude, longitude: loc.coords.longitude })
-        ).catch(err => console.error("Erro no rastreio:", err));
-    }
-
-    async function carregarRota() {
+    // CHAMADA À API PARA OBTER A ROTA OTIMIZADA
+    async function carregarRotaDoServidor() {
         try {
             const response = await fetch(`${API_URL}/rota/otimizar/${MOTORISTA_ID}`, {
                 headers: { 'bypass-tunnel-reminder': 'true' }
             });
-            
-            if (!response.ok) {
-                console.warn(`[DEBUG] Servidor retornou erro: ${response.status}`);
-                return;
+            if (response.ok) {
+                const data = await response.json();
+                setRota(data);
             }
-            const data = await response.json();
-            setRota(data);
-            console.log(`[DEBUG] Rota carregada com sucesso. ${data.length} passageiro(s) encontrado(s).`);
         } catch (error) {
-            console.error('Erro de rede:', error);
+            Alert.alert('Erro', 'Falha ao conectar com o backend. Verifique o túnel.');
         }
     }
 
-    async function recalcularRota() {
-        setLoading(true);
-        await carregarRota();
-        setLoading(false);
-    }
-
-    if (loading) {
-        return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="white" />
-                <Text style={styles.loadingText}>Mapeando rota nas ruas...</Text>
-            </View>
-        );
-    }
-
-    // Mapa Web Completo com Leaflet (OpenStreetMap) e OSRM (Traçado de Ruas)
+    // ARQUIVO HTML COMPLETO COM TODA A LÓGICA DE NAVEGAÇÃO
     const htmlDoMapa = `
         <!DOCTYPE html>
         <html>
         <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
             <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
             <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
             <style>
                 body { padding: 0; margin: 0; }
-                #map { height: 100vh; width: 100vw; background: #e5e5e5; }
+                #map { height: 100vh; width: 100vw; }
+                .van-icon { font-size: 24px; text-align: center; }
             </style>
         </head>
         <body>
             <div id="map"></div>
             <script>
-                // Inicializa no GPS ou no centro da cidade
-                var map = L.map('map').setView([${localizacao?.latitude ?? -8.2331383}, ${localizacao?.longitude ?? -35.7475651}], 14);
+                // CONFIGURAÇÃO INICIAL DO LEAFLET
+                var map = L.map('map').setView([-8.23, -35.74], 14);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
                 
-                // Camada do OpenStreetMap
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '© OpenStreetMap'
-                }).addTo(map);
-
-                var pontosDaRota = [];
-
-                // Posição do Motorista (Azul)
-                ${localizacao ? `
-                    var motoristaLat = ${localizacao.latitude};
-                    var motoristaLng = ${localizacao.longitude};
-                    L.circleMarker([motoristaLat, motoristaLng], {color: '#007AFF', radius: 8, fillOpacity: 1}).addTo(map).bindPopup("<b>Você está aqui</b>");
-                    pontosDaRota.push({lat: motoristaLat, lng: motoristaLng});
-                ` : ''}
-
-                // Posição dos Passageiros (Preto)
+                // VARIÁVEIS DE ESTADO DO MAPA
+                var vanMarker = L.marker([0,0], {icon: L.divIcon({html: '🚐', className: 'van-icon', iconSize: [30,30]})}).addTo(map);
+                var polyline = L.polyline([], {color: '#2563eb', weight: 8, opacity: 0.7, lineJoin: 'round'}).addTo(map);
+                var fullCoords = [];
                 var passageiros = ${JSON.stringify(rota)};
-                passageiros.forEach(function(p, index) {
-                    L.marker([p.latitude, p.longitude]).addTo(map)
-                     .bindPopup("<b>" + (index + 1) + ". " + p.nome + "</b><br>" + p.enderecoCompleto);
-                    pontosDaRota.push({lat: p.latitude, lng: p.longitude});
+                var uniCaruaru = [-8.2833, -35.9715];
+
+                // ADICIONAR PASSAGEIROS AO MAPA
+                passageiros.forEach((p, i) => {
+                    L.marker([p.latitude, p.longitude]).addTo(map).bindPopup("<b>" + (i+1) + ". " + p.nome + "</b>");
                 });
 
-                // Traçado real das ruas com OSRM
-                if (pontosDaRota.length > 1) {
-                    var waypoints = pontosDaRota.map(function(p) { return p.lng + ',' + p.lat; }).join(';');
-                    var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + waypoints + '?geometries=geojson';
+                // ADICIONAR DESTINO FINAL (UNINASSAU)
+                L.marker(uniCaruaru, {
+                    icon: new L.Icon({iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [25, 41]})
+                }).addTo(map).bindPopup("<b>🏁 UNINASSAU</b>");
 
-                    fetch(osrmUrl)
-                        .then(function(response) { return response.json(); })
-                        .then(function(data) {
-                            if(data.routes && data.routes.length > 0) {
-                                var coordenadasRua = data.routes[0].geometry.coordinates.map(function(coord) {
-                                    return [coord[1], coord[0]];
-                                });
-                                var polyline = L.polyline(coordenadasRua, {color: 'black', weight: 5, opacity: 0.7}).addTo(map);
-                                map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
-                            } else {
-                                // Fallback em linha reta se o OSRM der timeout
-                                var fallbackCoords = pontosDaRota.map(function(p){ return [p.lat, p.lng]; });
-                                L.polyline(fallbackCoords, {color: 'red', weight: 4, dashArray: '10, 10'}).addTo(map);
-                            }
-                        })
-                        .catch(function(err) {
-                            console.error("Erro na API OSRM: ", err);
-                            var fallbackCoords = pontosDaRota.map(function(p){ return [p.lat, p.lng]; });
-                            L.polyline(fallbackCoords, {color: 'red', weight: 4, dashArray: '10, 10'}).addTo(map);
+                // FUNÇÃO DE ATUALIZAÇÃO DA POSIÇÃO E RASTRO
+                function atualizarVan(pos) {
+                    vanMarker.setLatLng(pos);
+                    // Lógica para apagar o caminho atrás da van
+                    var filtrado = fullCoords.filter(c => map.distance(c, pos) > 40);
+                    polyline.setLatLngs(filtrado);
+                    // Lógica de desvio: Se estiver a mais de 50m do traçado, recalcula
+                    if (fullCoords.length > 0 && fullCoords.every(c => map.distance(c, pos) > 50)) {
+                        recalcularRotaCompleta(pos);
+                    }
+                }
+
+                // FUNÇÃO DE RECALCULO DE ROTA (DETECTOR DE DESVIO)
+                function recalcularRotaCompleta(novaPos) {
+                    var waypoints = novaPos[1] + "," + novaPos[0] + ";" + 
+                                   passageiros.map(p => p.longitude + ',' + p.latitude).join(';') + 
+                                   ";" + uniCaruaru[1] + "," + uniCaruaru[0];
+                    
+                    fetch('https://router.project-osrm.org/route/v1/driving/' + waypoints + '?geometries=geojson&overview=full')
+                        .then(r => r.json()).then(data => {
+                            fullCoords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                            polyline.setLatLngs(fullCoords);
                         });
                 }
+
+                // CÁLCULO INICIAL DA ROTA
+                var startWay = "${localizacao?.longitude ?? -35.75},${localizacao?.latitude ?? -8.23}";
+                var initialWaypoints = startWay + ";" + passageiros.map(p => p.longitude + ',' + p.latitude).join(';') + ";" + uniCaruaru[1] + "," + uniCaruaru[0];
+                
+                fetch('https://router.project-osrm.org/route/v1/driving/' + initialWaypoints + '?geometries=geojson&overview=full')
+                    .then(r => r.json()).then(data => {
+                        fullCoords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                        polyline.setLatLngs(fullCoords);
+                    });
             </script>
         </body>
         </html>
     `;
 
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#ffffff" />
+                <Text style={styles.loadingText}>Configurando mapa profissional...</Text>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             <WebView 
-                originWhitelist={['*']}
+                ref={webViewRef}
+                originWhitelist={['*']} 
                 source={{ html: htmlDoMapa }} 
                 style={styles.map} 
-                showsVerticalScrollIndicator={false}
-                showsHorizontalScrollIndicator={false}
             />
-
-            <View style={styles.botoesContainer}>
-                <TouchableOpacity
-                    style={[styles.botao, pausado && styles.botaoPausado]}
-                    onPress={() => setPausado(!pausado)}
-                >
-                    <Text style={styles.botaoTexto}>{pausado ? 'Retomar Rota' : 'Pausar Rota'}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.botaoRecalcular} onPress={recalcularRota}>
-                    <Text style={styles.botaoTexto}>Recalcular Rota</Text>
-                </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.botaoAtualizar} onPress={carregarRotaDoServidor}>
+                <Text style={styles.textoBotao}>Recarregar Rota</Text>
+            </TouchableOpacity>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: 'black' },
+    container: { flex: 1, backgroundColor: '#000' },
     map: { flex: 1 },
-    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'black', gap: 15 },
-    loadingText: { color: 'white', fontSize: 18 },
-    botoesContainer: { position: 'absolute', bottom: 40, left: 20, right: 20, gap: 10 },
-    botao: { backgroundColor: 'black', padding: 15, borderRadius: 15, alignItems: 'center' },
-    botaoPausado: { backgroundColor: '#444' },
-    botaoRecalcular: { backgroundColor: '#222', padding: 15, borderRadius: 15, alignItems: 'center' },
-    botaoTexto: { color: 'white', fontSize: 16, fontWeight: '600' },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' },
+    loadingText: { color: '#ffffff', fontSize: 16, marginTop: 15, fontWeight: '500' },
+    botaoAtualizar: { 
+        position: 'absolute', 
+        bottom: 30, 
+        left: 20, 
+        right: 20, 
+        padding: 18, 
+        backgroundColor: '#2563eb', 
+        borderRadius: 12, 
+        alignItems: 'center',
+        elevation: 5 
+    },
+    textoBotao: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' }
 });
