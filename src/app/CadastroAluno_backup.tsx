@@ -1,19 +1,16 @@
 import React, { useState } from 'react';
 import { View, TextInput, Button, Alert, StyleSheet, Text, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-// Importação centralizada da configuração
-import { API_URL } from '../config/config';
+import { useRouter } from 'expo-router';
+// Importação centralizada da URL
+import { API_URL } from '../config/config'; 
 
-export default function Signup() {
-    const { tipo } = useLocalSearchParams();
+export default function CadastroAluno() {
     const router = useRouter();
     const [nome, setNome] = useState('');
     const [cpf, setCpf] = useState('');
     const [senha, setSenha] = useState('');
     const [telefone, setTelefone] = useState('');
     const [loading, setLoading] = useState(false);
-
-    const tipoUsuario = (tipo as string) || 'PASSAGEIRO';
 
     async function handleCadastro() {
         if (!nome || !cpf || !senha || !telefone) {
@@ -24,7 +21,6 @@ export default function Signup() {
         setLoading(true);
 
         try {
-            // Uso da API_URL centralizada e crases para interpolação
             const response = await fetch(`${API_URL}/usuarios/cadastrar`, {
                 method: 'POST',
                 headers: { 
@@ -36,29 +32,21 @@ export default function Signup() {
                     cpf, 
                     senha, 
                     telefone,
-                    tipo: tipoUsuario, 
+                    tipo: 'PASSAGEIRO', 
                     enderecoCompleto: 'Endereço Pendente', 
                     latitude: 0.0, 
                     longitude: 0.0 
                 })
             });
 
-            const statusCode = response.status;
-            const respostaEmTexto = await response.text(); 
-
-            console.log("--- DIAGNÓSTICO DE CADASTRO ---");
-            console.log("Status Code:", statusCode);
-            console.log("Corpo da Resposta:", respostaEmTexto);
-
             if (response.ok) {
-                Alert.alert("Sucesso", `${tipoUsuario} registrado com sucesso!`);
-                router.replace('/loginn');
+                Alert.alert("Sucesso", "Passageiro registrado com sucesso!");
+                router.replace('/loginn'); // Certifique-se de que o nome da rota está correto
             } else {
-                Alert.alert(`Falha (Erro ${statusCode})`, respostaEmTexto.substring(0, 150));
+                Alert.alert("Erro", "O banco rejeitou o cadastro. CPF ou telefone já existem.");
             }
         } catch (error) {
-            console.error(error);
-            Alert.alert("Erro de Conexão", "A ponte caiu. Verifique o link do Localtunnel.");
+            Alert.alert("Erro de Conexão", "Não foi possível alcançar o servidor.");
         } finally {
             setLoading(false);
         }
@@ -68,7 +56,7 @@ export default function Signup() {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
             <View style={styles.content}>
-                <Text style={styles.titulo}>Cadastro de {tipoUsuario}</Text>
+                <Text style={styles.titulo}>Cadastro de Passageiro</Text>
                 <Text style={styles.subtitulo}>A sua jornada começa aqui</Text>
                 
                 <TextInput 
@@ -123,8 +111,7 @@ const styles = StyleSheet.create({
         fontSize: 26, 
         fontWeight: 'bold', 
         color: '#354d62',
-        textAlign: 'center',
-        textTransform: 'capitalize'
+        textAlign: 'center' 
     },
     subtitulo: {
         fontSize: 14,

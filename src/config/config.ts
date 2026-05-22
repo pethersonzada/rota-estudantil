@@ -1,0 +1,1 @@
+export const API_URL = 'https://thirty-cobras-grab.loca.lt';
