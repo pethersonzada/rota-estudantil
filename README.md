@@ -12,3 +12,13 @@ Sistema de gestão de rotas para transporte escolar. Responsável pela persistê
 ### Regras de Negócio
  * **Bloqueio de Rota**: O motorista só pode iniciar a rota se o total de passageiros for igual ao total de respostas (status não nulo).
  * **Transacionalidade**: Operações de presença são protegidas por @Transactional para garantir a integridade dos dados.
+
+### Pré-requisitos
+ * Node.js 18+, Expo 55 CLI.
+ 
+### Instalação
+* Configure o config.js com o IP do servidor (pegue o IP do servidor executando o comando "npx localtunnel --port 8080") e execute npx expo start.
+
+## Visualizar o Backend da Aplicação
+
+https://github.com/pethersonzada/van-app-backend/
