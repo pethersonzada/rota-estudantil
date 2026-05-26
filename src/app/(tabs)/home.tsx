@@ -1,88 +1,92 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/config';
-
-fetch(`${API_URL}/usuarios/passageiros`, { 
-    headers: { 'bypass-tunnel-reminder': 'true' } 
-})
 
 export default function Home() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [user, setUser] = useState({ id: '', nome: '', tipo: '' });
     const [passageiros, setPassageiros] = useState<any[]>([]);
-    const [vanAtiva, setVanAtiva] = useState(false);
+    const [statusConfirmado, setStatusConfirmado] = useState<string | null>(null);
 
-    useEffect(() => {
-        carregarDados();
-    }, []);
+    useEffect(() => { carregarDados(); }, []);
 
     async function carregarDados() {
-        const id = await AsyncStorage.getItem('userId') || '';
-        const nome = await AsyncStorage.getItem('userName') || 'Usuário';
-        const tipo = await AsyncStorage.getItem('userTipo') || '';
-        setUser({ id, nome, tipo });
-
-        fetch(`${API_URL}/usuarios/passageiros`, { headers: { 'bypass-tunnel-reminder': 'true' } })
-            .then(res => res.json())
-            .then(data => setPassageiros(data))
-            .catch(console.log);
-
-        fetch(`${API_URL}/van/status`).then(res => res.json()).then(setVanAtiva).catch(() => setVanAtiva(false));
-        
+        try {
+            const id = await AsyncStorage.getItem('userId');
+            const nome = await AsyncStorage.getItem('userName') || 'Usuário';
+            const tipo = await AsyncStorage.getItem('userTipo') || '';
+            if (id) setUser({ id, nome, tipo });
+            
+            const res = await fetch(`${API_URL}/usuarios/passageiros`);
+            const data = await res.json();
+            setPassageiros(data);
+            const meuStatus = data.find((p: any) => p.id.toString() === id);
+            setStatusConfirmado(meuStatus?.status || null);
+        } catch (e) { console.log(e); }
         setLoading(false);
     }
+
+    async function registrarPresenca(status: string) {
+        const id = await AsyncStorage.getItem('userId');
+        if (!id) return;
+
+        // Atualização Otimista
+        setStatusConfirmado(status === 'LIMPAR' ? null : status);
+
+        try {
+            const res = await fetch(`${API_URL}/rota/confirmar?usuarioId=${id}&status=${status}`, { method: 'POST' });
+            if (!res.ok) {
+                carregarDados();
+                Alert.alert("Erro", "Erro ao salvar no servidor.");
+            }
+        } catch (e) {
+            carregarDados();
+        }
+    }
+
+    const totalPassageiros = passageiros.length;
+    const totalRespostas = passageiros.filter(p => p.status !== null).length;
+    const todosResponderam = totalPassageiros > 0 && totalRespostas === totalPassageiros;
 
     if (loading) return <ActivityIndicator size="large" color="#2563eb" style={{ flex: 1 }} />;
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
-            
-            <View style={styles.header}>
-                <Text style={styles.welcome}>Olá, {user.nome.split(' ')[0]}</Text>
-                <Text style={styles.subtext}>{user.tipo === 'MOTORISTA' ? 'Gerenciando a frota' : 'Acompanhando seu trajeto'}</Text>
-            </View>
-
+            <View style={styles.header}><Text style={styles.welcome}>Olá, {user.nome.split(' ')[0]}</Text></View>
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 {user.tipo === 'MOTORISTA' ? (
                     <>
-                        <TouchableOpacity style={styles.cardAction} onPress={() => router.push('/chamada')}>
-                            <Ionicons name="list-outline" size={24} color="#2563eb" />
-                            <Text style={styles.cardTitle}>Lista de Chamada</Text>
-                        </TouchableOpacity>
-
-                        <Text style={styles.sectionTitle}>Passageiros Cadastrados</Text>
+                        <View style={[styles.statusBox, { backgroundColor: todosResponderam ? '#dcfce7' : '#fee2e2' }]}>
+                            <Text style={{ fontWeight: 'bold' }}>{todosResponderam ? "✅ TODOS RESPONDERAM" : `⚠️ AGUARDANDO (${totalRespostas}/${totalPassageiros})`}</Text>
+                        </View>
                         <View style={styles.cardList}>
                             {passageiros.map(p => (
                                 <View key={p.id} style={styles.listItem}>
-                                    <Text style={styles.listText}>{p.nome}</Text>
+                                    <Text>{p.nome}</Text>
+                                    <Ionicons name={p.status ? "checkmark-circle" : "alert-circle"} size={22} color={p.status ? "#059669" : "#dc2626"} />
                                 </View>
                             ))}
                         </View>
-
-                        <Text style={styles.sectionTitle}>Iniciar Rota</Text>
-                        <TouchableOpacity style={[styles.btnRota, styles.btnIda]} onPress={() => router.push('/mapa?sentido=ida')}>
-                            <Text style={styles.btnText}>ROTA DE IDA</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.btnRota, styles.btnVolta]} onPress={() => router.push('/mapa?sentido=volta')}>
-                            <Text style={styles.btnText}>ROTA DE VOLTA</Text>
+                        <TouchableOpacity disabled={!todosResponderam} style={[styles.btn, !todosResponderam && styles.btnDisabled]} onPress={() => router.push('/mapa?sentido=ida')}>
+                            <Text style={styles.btnText}>{todosResponderam ? "INICIAR ROTA" : "PENDENTE DE RESPOSTA"}</Text>
                         </TouchableOpacity>
                     </>
                 ) : (
                     <>
-                        <Text style={styles.sectionTitle}>Status do Trajeto</Text>
-                        {vanAtiva ? (
-                            <TouchableOpacity style={styles.btnMapaAtivo} onPress={() => router.push('/mapa?sentido=ida')}>
-                                <Ionicons name="map-outline" size={24} color="#fff" />
-                                <Text style={styles.btnText}>VISUALIZAR MAPA AO VIVO</Text>
-                            </TouchableOpacity>
+                        {statusConfirmado ? (
+                            <View style={styles.cardConfirmado}>
+                                <Text>✅ Status: <Text style={{fontWeight:'bold'}}>{statusConfirmado}</Text></Text>
+                                <TouchableOpacity onPress={() => registrarPresenca('LIMPAR')} style={styles.btnAlterar}><Text style={styles.btnAlterarText}>Limpar Decisão</Text></TouchableOpacity>
+                            </View>
                         ) : (
-                            <View style={styles.cardInativo}>
-                                <Text style={styles.inativoText}>A van ainda não iniciou o trajeto.</Text>
+                            <View style={styles.grid}>
+                                {['IDA', 'VOLTA', 'AMBOS', 'NAO_VOU'].map((s) => (
+                                    <TouchableOpacity key={s} style={styles.btnPequeno} onPress={() => registrarPresenca(s)}><Text style={styles.btnText}>{s}</Text></TouchableOpacity>
+                                ))}
                             </View>
                         )}
                     </>
@@ -94,21 +98,18 @@ export default function Home() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f8fafc' },
-    header: { padding: 30, paddingTop: 60, backgroundColor: '#ffffff' },
-    welcome: { fontSize: 32, fontWeight: '800', color: '#1e293b' },
-    subtext: { fontSize: 16, color: '#64748b' },
+    header: { padding: 30, paddingTop: 60, backgroundColor: '#fff' },
+    welcome: { fontSize: 32, fontWeight: '800' },
     scrollContent: { padding: 20 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b', marginVertical: 20 },
-    cardAction: { backgroundColor: '#ffffff', padding: 20, borderRadius: 15, flexDirection: 'row', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0' },
-    cardTitle: { marginLeft: 15, fontSize: 16, fontWeight: '600', color: '#1e293b' },
-    cardList: { backgroundColor: '#ffffff', borderRadius: 15, padding: 15, borderWidth: 1, borderColor: '#e2e8f0' },
-    listItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-    listText: { color: '#334155', fontSize: 16 },
-    btnRota: { padding: 20, borderRadius: 15, alignItems: 'center', marginBottom: 15 },
-    btnIda: { backgroundColor: '#2563eb' },
-    btnVolta: { backgroundColor: '#7c3aed' },
-    btnMapaAtivo: { backgroundColor: '#10b981', padding: 20, borderRadius: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-    btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-    cardInativo: { padding: 20, backgroundColor: '#ffffff', borderRadius: 15, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
-    inativoText: { color: '#94a3b8' }
+    cardConfirmado: { backgroundColor: '#fff', padding: 20, borderRadius: 15, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 20 },
+    btnAlterar: { marginTop: 10, padding: 10, backgroundColor: '#fee2e2', borderRadius: 8 },
+    btnAlterarText: { color: '#dc2626', fontWeight: 'bold' },
+    btn: { padding: 20, borderRadius: 15, alignItems: 'center', backgroundColor: '#2563eb' },
+    btnDisabled: { backgroundColor: '#cbd5e1' },
+    btnPequeno: { padding: 15, borderRadius: 10, width: '47%', alignItems: 'center', marginBottom: 10, backgroundColor: '#2563eb' },
+    btnText: { color: '#fff', fontWeight: 'bold' },
+    cardList: { backgroundColor: '#fff', borderRadius: 15, padding: 15, marginBottom: 20 },
+    listItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 },
+    statusBox: { padding: 20, borderRadius: 15, alignItems: 'center', marginBottom: 20 },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }
 });
