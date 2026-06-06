@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import { View, TextInput, Button, Alert, StyleSheet, Text, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-// Importação centralizada da configuração
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { API_URL } from '../config/config';
 
 export default function Signup() {
@@ -17,48 +16,27 @@ export default function Signup() {
 
     async function handleCadastro() {
         if (!nome || !cpf || !senha || !telefone) {
-            Alert.alert("Atenção", "Preencha todos os campos para continuar.");
+            Alert.alert("Atenção", "Preencha todos os campos.");
             return;
         }
 
         setLoading(true);
-
         try {
-            // Uso da API_URL centralizada e crases para interpolação
             const response = await fetch(`${API_URL}/usuarios/cadastrar`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Bypass-Tunnel-Reminder': 'true' 
-                },
-                body: JSON.stringify({ 
-                    nome, 
-                    cpf, 
-                    senha, 
-                    telefone,
-                    tipo: tipoUsuario, 
-                    enderecoCompleto: 'Endereço Pendente', 
-                    latitude: 0.0, 
-                    longitude: 0.0 
-                })
+                headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+                body: JSON.stringify({ nome, cpf, senha, telefone, tipo: tipoUsuario, enderecoCompleto: 'Endereço Pendente', latitude: 0.0, longitude: 0.0 })
             });
 
-            const statusCode = response.status;
-            const respostaEmTexto = await response.text(); 
-
-            console.log("--- DIAGNÓSTICO DE CADASTRO ---");
-            console.log("Status Code:", statusCode);
-            console.log("Corpo da Resposta:", respostaEmTexto);
-
             if (response.ok) {
-                Alert.alert("Sucesso", `${tipoUsuario} registrado com sucesso!`);
+                Alert.alert("Sucesso", "Conta criada com sucesso!");
                 router.replace('/loginn');
             } else {
-                Alert.alert(`Falha (Erro ${statusCode})`, respostaEmTexto.substring(0, 150));
+                const erro = await response.text();
+                Alert.alert("Erro", erro.substring(0, 100));
             }
         } catch (error) {
-            console.error(error);
-            Alert.alert("Erro de Conexão", "A ponte caiu. Verifique o link do Localtunnel.");
+            Alert.alert("Erro de Conexão", "Verifique o servidor.");
         } finally {
             setLoading(false);
         }
@@ -67,83 +45,31 @@ export default function Signup() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
-            <View style={styles.content}>
-                <Text style={styles.titulo}>Cadastro de {tipoUsuario}</Text>
-                <Text style={styles.subtitulo}>A sua jornada começa aqui</Text>
-                
-                <TextInput 
-                    style={styles.input} 
-                    placeholder="Nome Completo" 
-                    onChangeText={setNome} 
-                    editable={!loading}
-                />
-                <TextInput 
-                    style={styles.input} 
-                    placeholder="CPF" 
-                    keyboardType="numeric" 
-                    onChangeText={setCpf} 
-                    editable={!loading}
-                />
-                <TextInput 
-                    style={styles.input} 
-                    placeholder="Telefone" 
-                    keyboardType="phone-pad" 
-                    onChangeText={setTelefone} 
-                    editable={!loading}
-                />
-                <TextInput 
-                    style={styles.input} 
-                    placeholder="Senha" 
-                    secureTextEntry 
-                    onChangeText={setSenha} 
-                    editable={!loading}
-                />
-                
-                {loading ? (
-                    <ActivityIndicator size="large" color="#354d62" />
-                ) : (
-                    <Button title="CRIAR CONTA" onPress={handleCadastro} color="#354d62" />
-                )}
-            </View>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}>
+                <ScrollView contentContainerStyle={styles.content}>
+                    <Text style={styles.titulo}>Cadastro {tipoUsuario}</Text>
+                    <Text style={styles.subtitulo}>Preencha seus dados para começar</Text>
+                    
+                    <TextInput style={styles.input} placeholder="Nome Completo" onChangeText={setNome} editable={!loading} />
+                    <TextInput style={styles.input} placeholder="CPF" keyboardType="numeric" onChangeText={setCpf} editable={!loading} />
+                    <TextInput style={styles.input} placeholder="Telefone" keyboardType="phone-pad" onChangeText={setTelefone} editable={!loading} />
+                    <TextInput style={styles.input} placeholder="Senha" secureTextEntry onChangeText={setSenha} editable={!loading} />
+                    
+                    <TouchableOpacity style={styles.btnPrimary} onPress={handleCadastro} disabled={loading}>
+                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>CRIAR CONTA</Text>}
+                    </TouchableOpacity>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { 
-        flex: 1, 
-        backgroundColor: '#f5f5f5' 
-    },
-    content: {
-        flex: 1,
-        padding: 25,
-        justifyContent: 'center'
-    },
-    titulo: { 
-        fontSize: 26, 
-        fontWeight: 'bold', 
-        color: '#354d62',
-        textAlign: 'center',
-        textTransform: 'capitalize'
-    },
-    subtitulo: {
-        fontSize: 14,
-        color: '#666',
-        textAlign: 'center',
-        marginBottom: 30,
-        fontStyle: 'italic'
-    },
-    input: { 
-        backgroundColor: '#fff',
-        borderWidth: 1, 
-        borderColor: '#ddd', 
-        padding: 15, 
-        marginBottom: 15, 
-        borderRadius: 10,
-        fontSize: 16,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 5
-    }
+    container: { flex: 1, backgroundColor: '#f1f5f9' },
+    content: { flexGrow: 1, padding: 30, justifyContent: 'center' },
+    titulo: { fontSize: 32, fontWeight: '800', color: '#1e293b', textAlign: 'center', marginBottom: 10 },
+    subtitulo: { fontSize: 16, color: '#64748b', textAlign: 'center', marginBottom: 40 },
+    input: { backgroundColor: '#fff', padding: 18, borderRadius: 15, marginBottom: 15, fontSize: 16, borderWidth: 1, borderColor: '#e2e8f0' },
+    btnPrimary: { backgroundColor: '#2563eb', padding: 20, borderRadius: 15, alignItems: 'center', marginTop: 10 },
+    btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });

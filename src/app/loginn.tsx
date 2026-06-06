@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, StatusBar, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// Importação centralizada da URL
-import { API_URL } from '.././config/config'; 
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, SafeAreaView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { API_URL } from '.././config/config';
 
 export default function Login() {
     const router = useRouter();
@@ -20,8 +19,7 @@ export default function Login() {
 
         setLoading(true);
         try {
-            // Uso da variável importada API_URL
-            const response = await fetch(`${API_URL}/usuarios/login`, {
+            const response = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -35,6 +33,7 @@ export default function Login() {
                 await AsyncStorage.setItem('userId', String(data.id));
                 await AsyncStorage.setItem('userName', data.nome);
                 await AsyncStorage.setItem('userTipo', data.tipo);
+                await AsyncStorage.setItem('userEndereco', data.endereco || '');
                 
                 router.replace('/(tabs)/home');
             } else {

@@ -46,20 +46,37 @@ export default function CadastroEndereco() {
 
     const salvarEndereco = async () => {
         if (!location) return Alert.alert('Atenção', 'Selecione uma localização no mapa.');
+        
         try {
             const userId = await AsyncStorage.getItem('userId');
+            console.log("VERDADE 1: ID do Usuário resgatado da memória:", userId);
+
+            const payload = { 
+                idUsuario: Number(userId), 
+                latitude: location.latitude, 
+                longitude: location.longitude, 
+                enderecoCompleto 
+            };
+            console.log("VERDADE 2: Dados que estão viajando para o Java:", payload);
+
             const response = await fetch(`${API_URL}/usuarios/salvar-endereco`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ idUsuario: Number(userId), latitude: location.latitude, longitude: location.longitude, enderecoCompleto })
+                body: JSON.stringify(payload)
             });
 
             if (response.ok) {
                 Alert.alert('Sucesso', 'Local definido!');
                 router.replace('/(tabs)/home');
+            } else {
+                // Aqui o monstro sai da jaula
+                const errorText = await response.text();
+                console.log("VERDADE 3: A recusa do Servidor (Status " + response.status + "):", errorText);
+                Alert.alert('Erro do Servidor', `Status: ${response.status}. Olhe o terminal.`);
             }
         } catch (e) {
-            Alert.alert('Erro', 'Falha na conexão com o servidor.');
+            console.log("VERDADE FATAL: Erro de rede ou comunicação:", e);
+            Alert.alert('Erro', 'Falha estrutural na conexão.');
         }
     };
 
