@@ -1,41 +1,69 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, ActivityIndicator, SafeAreaView, StatusBar, TouchableOpacity } from 'react-native';
-import { WebView } from 'react-native-webview';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../config/config'; // Importação centralizada
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { WebView } from 'react-native-webview';
+import { API_URL } from '../config/config';
 
 export default function CadastroEndereco() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
-    const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-    const [enderecoCompleto, setEnderecoCompleto] = useState('Toque no mapa para marcar sua localização');
+    
+    // Guarda a localização inicial apenas para montar o mapa
+    const [initialLocation, setInitialLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+    const [enderecoCompleto, setEnderecoCompleto] = useState('Buscando seu endereço...');
+    
+    // useRef guarda a coordenada mais recente sem forçar a tela a piscar
+    const currentCoords = useRef<{ latitude: number; longitude: number } | null>(null);
 
     useEffect(() => {
-        async function obterLocalizacao() {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                setLocation({ latitude: -8.2336, longitude: -35.7958 });
-                setLoading(false);
-                return;
-            }
+        (async () => {
             try {
-                let loc = await Location.getCurrentPositionAsync({});
-                setLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+                let { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') {
+                    Alert.alert('Aviso', 'Permissão de GPS negada. Usando local padrão.');
+                    const fallback = { latitude: -8.2336, longitude: -35.7958 };
+                    setInitialLocation(fallback);
+                    currentCoords.current = fallback;
+                    setLoading(false);
+                    return;
+                }
+
+                // Força a precisão máxima do GPS
+                let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
+                const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+                
+                setInitialLocation(coords);
+                currentCoords.current = coords;
+
+                // Já tenta buscar o nome da rua onde você está agora
+                const [resultado] = await Location.reverseGeocodeAsync(coords);
+                if (resultado) {
+                    setEnderecoCompleto(`${resultado.street || 'Rua não identificada'}, ${resultado.streetNumber || 'S/N'}`);
+                } else {
+                    setEnderecoCompleto('Arraste o mapa para ajustar');
+                }
+
             } catch (error) {
-                setLocation({ latitude: -8.2336, longitude: -35.7958 });
+                Alert.alert('Erro de GPS', 'Não foi possível encontrar sua localização exata. Verifique o GPS.');
+                const fallback = { latitude: -8.2336, longitude: -35.7958 };
+                setInitialLocation(fallback);
+                currentCoords.current = fallback;
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
-        }
-        obterLocalizacao();
+        })();
     }, []);
 
     const handleMapMessage = async (event: any) => {
         try {
-            const { latitude, longitude } = JSON.parse(event.nativeEvent.data);
-            setLocation({ latitude, longitude });
-            const [resultado] = await Location.reverseGeocodeAsync({ latitude, longitude });
+            const { lat, lng } = JSON.parse(event.nativeEvent.data);
+            
+            // Atualiza a coordenada silenciosamente sem re renderizar o mapa
+            currentCoords.current = { latitude: lat, longitude: lng };
+            
+            const [resultado] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
             if (resultado) {
                 setEnderecoCompleto(`${resultado.street || 'Rua não identificada'}, ${resultado.streetNumber || 'S/N'}`);
             }
@@ -45,64 +73,84 @@ export default function CadastroEndereco() {
     };
 
     const salvarEndereco = async () => {
-        if (!location) return Alert.alert('Atenção', 'Selecione uma localização no mapa.');
-        
+        if (!currentCoords.current) return Alert.alert('Atenção', 'Aguarde o mapa carregar.');
         try {
             const userId = await AsyncStorage.getItem('userId');
-            console.log("VERDADE 1: ID do Usuário resgatado da memória:", userId);
-
             const payload = { 
                 idUsuario: Number(userId), 
-                latitude: location.latitude, 
-                longitude: location.longitude, 
+                latitude: currentCoords.current.latitude, 
+                longitude: currentCoords.current.longitude, 
                 enderecoCompleto 
             };
-            console.log("VERDADE 2: Dados que estão viajando para o Java:", payload);
-
+            
             const response = await fetch(`${API_URL}/usuarios/salvar-endereco`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-
             if (response.ok) {
                 Alert.alert('Sucesso', 'Local definido!');
                 router.replace('/(tabs)/home');
             } else {
-                // Aqui o monstro sai da jaula
-                const errorText = await response.text();
-                console.log("VERDADE 3: A recusa do Servidor (Status " + response.status + "):", errorText);
-                Alert.alert('Erro do Servidor', `Status: ${response.status}. Olhe o terminal.`);
+                Alert.alert('Erro', `Status: ${response.status}`);
             }
         } catch (e) {
-            console.log("VERDADE FATAL: Erro de rede ou comunicação:", e);
             Alert.alert('Erro', 'Falha estrutural na conexão.');
         }
     };
 
-    if (loading || !location) return <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>;
+    // O mapa só é montado UMA VEZ usando useMemo. 
+    const mapHtml = useMemo(() => {
+        if (!initialLocation) return '';
+        return `
+            <!DOCTYPE html><html><head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <style>
+                body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+                #map { height: 100vh; width: 100vw; position: absolute; top: 0; left: 0; }
+                .pino-container {
+                    position: absolute; top: 50%; left: 50%;
+                    width: 25px; height: 41px;
+                    margin-top: -41px; margin-left: -12.5px;
+                    z-index: 9999; pointer-events: none;
+                }
+            </style></head>
+            <body>
+                <div class="pino-container"><img src="https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png"></div>
+                <div id="map"></div>
+                <script>
+                    // Injeta a coordenada real direto na criação do mapa
+                    var map = L.map('map', {zoomControl: false, inertia: false, tap: true}).setView([${initialLocation.latitude}, ${initialLocation.longitude}], 16);
+                    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                    
+                    var timeout = null;
+                    map.on('move', function() {
+                        clearTimeout(timeout);
+                        timeout = setTimeout(function() {
+                            var center = map.getCenter();
+                            window.ReactNativeWebView.postMessage(JSON.stringify({ lat: center.lat, lng: center.lng }));
+                        }, 200);
+                    });
+                </script>
+            </body></html>
+        `;
+    }, [initialLocation]);
 
-    const mapHtml = `
-        <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <style>body, html, #map { height: 100%; margin: 0; }</style></head>
-        <body><div id="map"></div><script>
-            var map = L.map('map').setView([${location.latitude}, ${location.longitude}], 16);
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
-            var marker = L.marker([${location.latitude}, ${location.longitude}]).addTo(map);
-            map.on('click', function(e) {
-                marker.setLatLng(e.latlng);
-                window.ReactNativeWebView.postMessage(JSON.stringify({ latitude: e.latlng.lat, longitude: e.latlng.lng }));
-            });
-        </script></body></html>`;
+    if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>;
 
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
             <Text style={styles.header}>Onde você embarca?</Text>
             <View style={styles.mapContainer}>
-                <WebView source={{ html: mapHtml }} onMessage={handleMapMessage} javaScriptEnabled={true} scrollEnabled={false} />
+                <WebView 
+                    source={{ html: mapHtml }} 
+                    onMessage={handleMapMessage} 
+                    javaScriptEnabled={true} 
+                    scrollEnabled={false} 
+                />
             </View>
             <View style={styles.footer}>
                 <Text style={styles.enderecoLabel}>Endereço selecionado:</Text>

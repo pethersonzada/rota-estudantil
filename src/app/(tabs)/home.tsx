@@ -1,37 +1,104 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { API_URL } from '../../config/config';
 
 export default function Home() {
     const router = useRouter();
+    const vanMapRef = useRef<WebView>(null);
     const [loading, setLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [user, setUser] = useState({ id: '', nome: '', tipo: '' });
     const [passageiros, setPassageiros] = useState<any[]>([]);
     const [statusConfirmado, setStatusConfirmado] = useState<string>('');
     const [temEndereco, setTemEndereco] = useState(true);
+    const [sinalPerdido, setSinalPerdido] = useState(false);
+    
+    const [minhaLocalizacao, setMinhaLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
 
-    useEffect(() => { carregarDadosCompletos(); }, []);
+    useEffect(() => { 
+        carregarDadosCompletos(); 
+    }, []);
+
+    useEffect(() => {
+        let intervalo: number;
+        let errosConsecutivos = 0;
+
+        if (user.tipo && user.tipo !== 'MOTORISTA') {
+            intervalo = window.setInterval(async () => {
+                try {
+                    const res = await fetch(`${API_URL}/rota/localizacao-van`, {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    
+                    if (res.ok) {
+                        errosConsecutivos = 0;
+                        setSinalPerdido(false);
+                        const dadosVan = await res.json();
+                        if (dadosVan && dadosVan.latitude && dadosVan.longitude) {
+                            simularMovimentoDaVan(dadosVan.latitude, dadosVan.longitude);
+                        }
+                    } else {
+                        throw new Error('Sem sinal do backend');
+                    }
+                } catch (error) {
+                    errosConsecutivos++;
+                    if (errosConsecutivos > 3) setSinalPerdido(true);
+                }
+            }, 5000);
+        }
+
+        return () => window.clearInterval(intervalo);
+    }, [user.tipo]);
+
+    const simularMovimentoDaVan = (lat: number, lng: number) => {
+        if (vanMapRef.current) {
+            vanMapRef.current.injectJavaScript(`updateDriverLocation(${lat}, ${lng}); true;`);
+        }
+    };
 
     async function carregarDadosCompletos() {
         setLoading(true);
         await carregarInfoUsuario();
         await buscarPassageiros();
+        
+        try {
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status === 'granted') {
+                let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                setMinhaLocalizacao({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+            } else {
+                setMinhaLocalizacao({ latitude: -8.2336, longitude: -35.7958 });
+            }
+        } catch (e) {
+            setMinhaLocalizacao({ latitude: -8.2336, longitude: -35.7958 });
+        }
+        
         setLoading(false);
     }
 
     async function buscarPassageiros() {
         try {
-            const res = await fetch(`${API_URL}/usuarios/passageiros`);
+            const res = await fetch(`${API_URL}/usuarios/passageiros`, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            });
+            
+            if (!res.ok) throw new Error("Erro na requisição");
+            
             const data = await res.json();
             setPassageiros(data);
             const id = await AsyncStorage.getItem('userId');
             const meuStatus = data.find((p: any) => p.id.toString() === id);
             setStatusConfirmado(meuStatus?.status || '');
-        } catch (e) { Alert.alert("Erro", "Falha ao atualizar lista."); }
+        } catch (e) { 
+            Alert.alert("Erro", "Falha estrutural ao buscar a lista de passageiros."); 
+        }
     }
 
     async function carregarInfoUsuario() {
@@ -60,10 +127,23 @@ export default function Home() {
     async function registrarPresenca(status: string) {
         const id: string = await AsyncStorage.getItem('userId') || '';
         if (!id) return;
+        
         setStatusConfirmado(status === 'LIMPAR' ? '' : status);
+        
         try {
-            await fetch(`${API_URL}/rota/confirmar?usuarioId=${id}&status=${status}`, { method: 'POST' });
-        } catch (e) { buscarPassageiros(); }
+            const response = await fetch(`${API_URL}/rota/confirmar?usuarioId=${id}&status=${status}`, { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (!response.ok) {
+                buscarPassageiros(); 
+                Alert.alert("Erro do Servidor", "Sua confirmação não foi processada.");
+            }
+        } catch (e) { 
+            buscarPassageiros(); 
+            Alert.alert("Falha de Conexão", "Não foi possível conectar ao servidor.");
+        }
     }
 
     const totalPassageiros = passageiros.length;
@@ -85,6 +165,53 @@ export default function Home() {
         }
     };
 
+    const mapHtml = useMemo(() => {
+        if (!minhaLocalizacao) return '';
+        return `
+            <!DOCTYPE html><html><head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <style>
+                body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+                #map { height: 100vh; width: 100vw; position: absolute; top: 0; left: 0; }
+                .van-icon { font-size: 30px; text-align: center; }
+            </style></head>
+            <body>
+                <div id="map"></div>
+                <script>
+                    var map = L.map('map', {
+                        zoomControl: false, dragging: false, tap: false, 
+                        touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false
+                    }).setView([${minhaLocalizacao.latitude}, ${minhaLocalizacao.longitude}], 15);
+                    
+                    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                    
+                    var vanIcon = L.divIcon({
+                        html: '🚐', 
+                        className: 'van-icon', 
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+                    
+                    var driverMarker = null;
+                    
+                    L.circleMarker([${minhaLocalizacao.latitude}, ${minhaLocalizacao.longitude}], {
+                        radius: 8, fillColor: "#2563eb", color: "#ffffff", weight: 2, opacity: 1, fillOpacity: 0.8
+                    }).addTo(map);
+
+                    function updateDriverLocation(lat, lng) {
+                        if (!driverMarker) {
+                            driverMarker = L.marker([lat, lng], {icon: vanIcon}).addTo(map);
+                        } else {
+                            driverMarker.setLatLng([lat, lng]);
+                        }
+                        map.panTo([lat, lng]); 
+                    }
+                </script>
+            </body></html>`;
+    }, [minhaLocalizacao]);
+
     if (loading) return <ActivityIndicator size="large" color="#2563eb" style={{ flex: 1 }} />;
 
     return (
@@ -98,7 +225,7 @@ export default function Home() {
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 {!temEndereco && (
-                    <TouchableOpacity style={styles.bannerAlerta} onPress={() => router.push('/Perfil')}>
+                    <TouchableOpacity style={styles.bannerAlerta} onPress={() => router.push('/CadastroEndereco')}>
                         <Ionicons name="location" size={24} color="#b91c1c" />
                         <View style={{flex: 1, marginLeft: 10}}>
                             <Text style={styles.alertaTitulo}>Local de embarque faltando</Text>
@@ -160,6 +287,29 @@ export default function Home() {
                     </>
                 ) : (
                     <>
+                        <View style={styles.topoPassageiro}>
+                            <Text style={styles.sectionTitleLeft}>Radar do Motorista</Text>
+                            {sinalPerdido && (
+                                <View style={styles.sinalPerdidoBadge}>
+                                    <Ionicons name="warning" size={14} color="#b91c1c" />
+                                    <Text style={styles.sinalPerdidoTexto}>Sinal perdido</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={styles.radarCard}>
+                            {minhaLocalizacao ? (
+                                <WebView 
+                                    ref={vanMapRef}
+                                    source={{ html: mapHtml }} 
+                                    javaScriptEnabled={true} 
+                                    scrollEnabled={false} 
+                                />
+                            ) : (
+                                <ActivityIndicator size="large" color="#2563eb" style={{ flex: 1 }} />
+                            )}
+                        </View>
+
                         <View style={styles.infoCard}>
                             <Ionicons name="information-circle-outline" size={24} color="#2563eb" />
                             <Text style={styles.infoCardText}>Informe ao seu motorista se você vai utilizar o transporte hoje.</Text>
@@ -195,13 +345,17 @@ const styles = StyleSheet.create({
     header: { padding: 30, paddingTop: 60, backgroundColor: '#fff', borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
     welcome: { fontSize: 28, fontWeight: '800', color: '#1e293b' },
     dateText: { color: '#64748b', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', marginBottom: 5 },
-    scrollContent: { padding: 20 },
+    scrollContent: { padding: 20, paddingBottom: 40 },
     bannerAlerta: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fee2e2', padding: 15, borderRadius: 15, marginBottom: 20, borderWidth: 1, borderColor: '#fecaca' },
     alertaTitulo: { fontWeight: 'bold', color: '#991b1b' },
     alertaTexto: { fontSize: 12, color: '#b91c1c' },
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, marginTop: 25 },
     infoLabel: { fontSize: 16, fontWeight: 'bold', color: '#334155' },
-    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#334155', marginBottom: 15 },
+    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#334155', marginBottom: 10, textAlign: 'center' },
+    topoPassageiro: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+    sectionTitleLeft: { fontSize: 16, fontWeight: 'bold', color: '#334155' },
+    sinalPerdidoBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fee2e2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, gap: 4 },
+    sinalPerdidoTexto: { fontSize: 10, color: '#b91c1c', fontWeight: 'bold' },
     infoCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#eff6ff', padding: 15, borderRadius: 15, marginBottom: 20 },
     infoCardText: { flex: 1, marginLeft: 10, color: '#1e40af', fontSize: 14 },
     statusBox: { padding: 25, borderRadius: 20, alignItems: 'center', marginBottom: 25 },
@@ -212,10 +366,11 @@ const styles = StyleSheet.create({
     nameText: { fontSize: 16, fontWeight: '600', color: '#334155' },
     subText: { fontSize: 12, color: '#64748b' },
     badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+    radarCard: { height: 220, borderRadius: 20, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#e2e8f0', justifyContent: 'center' },
     cardConfirmado: { backgroundColor: '#fff', padding: 30, borderRadius: 25, alignItems: 'center' },
     confirmTitle: { fontSize: 20, fontWeight: 'bold', marginVertical: 10 },
     btnMotorista: { padding: 18, borderRadius: 15, width: '48%', alignItems: 'center', marginBottom: 15, flexDirection: 'row', justifyContent: 'center', gap: 8 },
-    btnPassageiro: { padding: 18, borderRadius: 15, width: '48%', alignItems: 'center', marginBottom: 15, backgroundColor: '#2563eb' },
+    btnPassageiro: { padding: 18, borderRadius: 15, width: '48%', alignItems: 'center', marginBottom: 10, backgroundColor: '#2563eb' },
     btnText: { color: '#fff', fontWeight: 'bold' },
     btnAlterar: { marginTop: 15, paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' },
     btnAlterarText: { color: '#dc2626', fontSize: 12, fontWeight: 'bold' },

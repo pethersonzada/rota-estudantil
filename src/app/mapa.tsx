@@ -1,8 +1,8 @@
 import * as Location from 'expo-location';
-import React, { useEffect, useState, useRef } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View, Alert, TouchableOpacity } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { API_URL } from '../config/config';
 
 type Passageiro = {
@@ -14,7 +14,6 @@ type Passageiro = {
 
 export default function Mapa() {
     const webViewRef = useRef<WebView>(null);
-    // LÊ DA TELA ANTERIOR SE É IDA OU VOLTA
     const { sentido } = useLocalSearchParams<{ sentido: string }>(); 
     const direcao = sentido || 'ida'; 
 
@@ -24,13 +23,33 @@ export default function Mapa() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        let locationSubscription: Location.LocationSubscription | null = null;
+
         const iniciarSistema = async () => {
             try {
                 const { status } = await Location.requestForegroundPermissionsAsync();
                 if (status === 'granted') {
-                    await Location.watchPositionAsync(
-                        { accuracy: Location.Accuracy.High, distanceInterval: 5 },
-                        (loc) => setLocalizacao({ latitude: loc.coords.latitude, longitude: loc.coords.longitude })
+                    locationSubscription = await Location.watchPositionAsync(
+                        { 
+                            accuracy: Location.Accuracy.High, 
+                            timeInterval: 5000, 
+                            distanceInterval: 5 
+                        },
+                        async (loc) => {
+                            const lat = loc.coords.latitude;
+                            const lng = loc.coords.longitude;
+                            
+                            setLocalizacao({ latitude: lat, longitude: lng });
+
+                            try {
+                                await fetch(`${API_URL}/rota/localizacao-van?latitude=${lat}&longitude=${lng}`, {
+                                    method: 'POST',
+                                    headers: { 'Accept': 'application/json' }
+                                });
+                            } catch (e) {
+                                console.log("Falha na transmissão silenciada. Verifique a rede.");
+                            }
+                        }
                     );
                 }
                 await carregarDadosDinamicamente();
@@ -40,14 +59,20 @@ export default function Mapa() {
                 setLoading(false);
             }
         };
+
         iniciarSistema();
+
+        return () => {
+            if (locationSubscription) {
+                locationSubscription.remove();
+            }
+        };
     }, []);
 
     useEffect(() => {
         if (localizacao && webViewRef.current) {
             webViewRef.current.injectJavaScript(`
-                window.posicaoAtual = [${localizacao.latitude}, ${localizacao.longitude}];
-                if (typeof atualizarVan === 'function') atualizarVan(window.posicaoAtual);
+                if (typeof atualizarVan === 'function') atualizarVan([${localizacao.latitude}, ${localizacao.longitude}]);
                 true;
             `);
         }
@@ -64,7 +89,6 @@ export default function Mapa() {
             const dadosMotorista = await resMotorista.json();
             setGaragem({ latitude: dadosMotorista.latitude, longitude: dadosMotorista.longitude });
 
-            // A MÁGICA: Pede ao Java apenas os passageiros baseados no SENTIDO da viagem
             const resRota = await fetch(`${API_URL}/rota/otimizar/${dadosMotorista.id}?sentido=${direcao}`, {
                 headers: { 'bypass-tunnel-reminder': 'true' }
             });
@@ -112,17 +136,19 @@ export default function Mapa() {
                     shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
                 });
 
-                var map = L.map('map').setView([${garagem.latitude}, ${garagem.longitude}], 14);
+                var startLat = ${localizacao?.latitude ?? garagem.latitude};
+                var startLng = ${localizacao?.longitude ?? garagem.longitude};
+                
+                var map = L.map('map').setView([startLat, startLng], 14);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
                 
-                var vanMarker = L.marker([0,0], {icon: L.divIcon({html: '🚐', className: 'van-icon', iconSize: [30,30]})}).addTo(map);
                 var polyline = L.polyline([], {color: '#2563eb', weight: 8, opacity: 0.7, lineJoin: 'round'}).addTo(map);
                 
                 var passageiros = ${JSON.stringify(rota)};
                 var casaMotorista = [${garagem.latitude}, ${garagem.longitude}]; 
-                var uniCaruaru = [-8.302755, -35.991248]; // Coordenada cravada da Facul
+                var uniCaruaru = [-8.302755, -35.991248]; 
 
-                var sentidoAtual = "${direcao}"; // Variável injetada pelo React
+                var sentidoAtual = "${direcao}"; 
 
                 L.marker(casaMotorista).addTo(map).bindPopup("<b>🏠 Garagem</b>");
                 L.marker(uniCaruaru, {
@@ -133,17 +159,13 @@ export default function Mapa() {
                     L.marker([p.latitude, p.longitude]).addTo(map).bindPopup("<b>" + p.nome + "</b>");
                 });
 
-                // A INVERSÃO DE POLARIDADE GEOGRÁFICA
                 function construirWaypoints() {
                     var pontos = [];
-                    
                     if (sentidoAtual === 'ida') {
-                        // Nasce na garagem, passa nos alunos, morre na facul
                         pontos.push(casaMotorista[1] + "," + casaMotorista[0]);
                         passageiros.forEach(function(p) { pontos.push(p.longitude + ',' + p.latitude); });
                         pontos.push(uniCaruaru[1] + "," + uniCaruaru[0]);
                     } else {
-                        // VOLTA: Nasce na Facul, inverte a ordem dos alunos, morre na garagem
                         pontos.push(uniCaruaru[1] + "," + uniCaruaru[0]);
                         passageiros.slice().reverse().forEach(function(p) { pontos.push(p.longitude + ',' + p.latitude); });
                         pontos.push(casaMotorista[1] + "," + casaMotorista[0]);
@@ -151,11 +173,21 @@ export default function Mapa() {
                     return pontos.join(';'); 
                 }
 
+                // CORREÇÃO: vanMarker inicia nulo para evitar ícone fantasma
+                var vanMarker = null;
+
                 function atualizarVan(pos) {
-                    vanMarker.setLatLng(pos);
+                    if (!vanMarker) {
+                        vanMarker = L.marker(pos, {icon: L.divIcon({html: '🚐', className: 'van-icon', iconSize: [30,30]})}).addTo(map);
+                    } else {
+                        vanMarker.setLatLng(pos);
+                    }
                 }
 
-                vanMarker.setLatLng([${localizacao?.latitude ?? garagem.latitude}, ${localizacao?.longitude ?? garagem.longitude}]); 
+                // Se já tivermos localização real, desenha, caso contrário, espera o sinal
+                if (${localizacao !== null ? 'true' : 'false'}) {
+                    atualizarVan([startLat, startLng]);
+                }
                 
                 var initialWaypoints = construirWaypoints();
                 
