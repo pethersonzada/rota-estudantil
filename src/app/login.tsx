@@ -102,11 +102,12 @@ export default function Login() {
                 <View style={styles.registerContainer}>
                     <Text style={styles.text}>Ainda não tem conta?</Text>
                     <View style={styles.row}>
-                        <TouchableOpacity onPress={() => router.push({ pathname: '/signup', params: { tipo: 'PASSAGEIRO' } })}>
-                            <Text style={styles.linkText}>Cadastrar Aluno</Text>
+                        <Text style={styles.text}>Cadastre-se como</Text>
+                        <TouchableOpacity onPress={() => router.push({ pathname: '/cadastro', params: { tipo: 'PASSAGEIRO' } })}>
+                            <Text style={styles.linkText}>Passageiro</Text>
                         </TouchableOpacity>
-                        <Text style={styles.text}> ou </Text>
-                        <TouchableOpacity onPress={() => router.push({ pathname: '/signup', params: { tipo: 'MOTORISTA' } })}>
+                        <Text style={styles.text}>ou</Text>
+                        <TouchableOpacity onPress={() => router.push({ pathname: '/cadastro', params: { tipo: 'MOTORISTA' } })}>
                             <Text style={styles.linkText}>Motorista</Text>
                         </TouchableOpacity>
                     </View>

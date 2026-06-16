@@ -197,7 +197,7 @@ export default function HomePassageiro() {
 
                 {statusConfirmado ? (
                     <View style={styles.cardConfirmado}>
-                        <Ionicons name="checkmark-circle" size={48} color="#059669" />
+                        <Ionicons name="checkmark-circle" size={48} color="#2563eb" />
                         <Text style={styles.confirmTitle}>Confirmado!</Text>
                         <Text style={styles.confirmStatus}>Sua opção: {statusConfirmado}</Text>
                         <TouchableOpacity onPress={() => registrarPresenca('LIMPAR')} style={styles.btnAlterar}>

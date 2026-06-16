@@ -51,7 +51,7 @@ export default function Perfil() {
                     <View style={styles.linha} />
                     <View style={styles.infoRow}>
                         <Text style={styles.label}>STATUS</Text>
-                        <Text style={[styles.valor, { color: '#10b981' }]}>Online</Text>
+                        <Text style={[styles.valor, { color: '#2536eb' }]}>Online</Text>
                     </View>
                 </View>
 
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     },
     avatarText: { fontSize: 40, color: '#fff', fontWeight: 'bold' },
     nome: { fontSize: 24, fontWeight: '800', color: '#1e293b' },
-    badge: { flexDirection: 'row', backgroundColor: '#10b981', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginTop: 10, alignItems: 'center' },
+    badge: { flexDirection: 'row', backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginTop: 10, alignItems: 'center' },
     badgeText: { color: '#fff', fontSize: 12, fontWeight: '600', marginLeft: 4 },
     card: { 
         backgroundColor: '#fff', padding: 25, borderRadius: 20, marginBottom: 20, 
