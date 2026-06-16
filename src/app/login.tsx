@@ -1,8 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { TextInputMask } from 'react-native-masked-text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_URL } from '../config/config';
@@ -60,7 +59,7 @@ export default function Login() {
                 showsVerticalScrollIndicator={false}
             >
                 <View style={styles.logoBox}>
-                    <Ionicons name="bus" size={48} color="#2563eb" />
+                    <Image source={require('@/assets/images/logo-app-sem-title.jpeg')} style={{ width: 150, height: 150, borderRadius: 20}}/>
                 </View>
 
                 <Text style={styles.title}>Bem-vindo de Volta!</Text>
@@ -122,7 +121,7 @@ const styles = StyleSheet.create({
     content: { padding: 30, flexGrow: 1, justifyContent: 'center' },
     logoBox: { 
         width: 90, height: 90, backgroundColor: '#eff6ff', 
-        borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 30, alignSelf: 'center',
+        borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 40, alignSelf: 'center',
         borderWidth: 1, borderColor: '#dbeafe'
     },
     title: { fontSize: 32, fontWeight: '800', color: '#1e293b', marginBottom: 10, textAlign: 'center' },
