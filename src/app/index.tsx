@@ -14,6 +14,5 @@ export default function Index() {
 
     if (isLoggedIn === null) return <View style={{flex: 1, justifyContent: 'center'}}><ActivityIndicator size="large" /></View>;
 
-    // Redireciona para o grupo de abas se logado, ou pro login se não
-    return isLoggedIn ? <Redirect href="/(tabs)/home" /> : <Redirect href="/loginn" />;
+    return isLoggedIn ? <Redirect href="/(tabs)/home" /> : <Redirect href="/login" />;
 }

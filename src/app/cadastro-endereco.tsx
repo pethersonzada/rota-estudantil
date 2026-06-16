@@ -1,13 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { API_URL } from '../config/config';
 
 export default function CadastroEndereco() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const [loading, setLoading] = useState(true);
     
     // Guarda a localização inicial apenas para montar o mapa
@@ -141,36 +144,55 @@ export default function CadastroEndereco() {
     if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>;
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
-            <Text style={styles.header}>Onde você embarca?</Text>
+        <View style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+            
+            <View style={[styles.headerOverlay, { paddingTop: insets.top + 15 }]}>
+                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                    <Ionicons name="arrow-back" size={24} color="#1e293b" />
+                </TouchableOpacity>
+                <Text style={styles.headerText}>Onde você embarca?</Text>
+            </View>
+
             <View style={styles.mapContainer}>
                 <WebView 
                     source={{ html: mapHtml }} 
                     onMessage={handleMapMessage} 
                     javaScriptEnabled={true} 
-                    scrollEnabled={false} 
+                    scrollEnabled={false}
+                    bounces={false}
                 />
             </View>
-            <View style={styles.footer}>
+
+            <View style={[styles.footer, { paddingBottom: insets.bottom + 25 }]}>
                 <Text style={styles.enderecoLabel}>Endereço selecionado:</Text>
                 <Text style={styles.enderecoText}>{enderecoCompleto}</Text>
                 <TouchableOpacity style={styles.button} onPress={salvarEndereco}>
                     <Text style={styles.buttonText}>Confirmar Localização</Text>
                 </TouchableOpacity>
             </View>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f8fafc' },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    header: { padding: 20, fontSize: 20, fontWeight: '800', color: '#1e293b', textAlign: 'center', marginTop: 10 },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
+    headerOverlay: { 
+        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, 
+        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 15,
+        backgroundColor: 'rgba(255,255,255,0.9)'
+    },
+    backButton: { width: 45, height: 45, backgroundColor: '#fff', borderRadius: 25, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2, marginRight: 15 },
+    headerText: { fontSize: 20, fontWeight: '800', color: '#1e293b' },
     mapContainer: { flex: 1 },
-    footer: { backgroundColor: '#fff', padding: 25, borderTopLeftRadius: 25, borderTopRightRadius: 25, borderWidth: 1, borderColor: '#e2e8f0' },
-    enderecoLabel: { fontWeight: '700', color: '#64748b', fontSize: 13, textTransform: 'uppercase' },
-    enderecoText: { fontSize: 16, marginVertical: 12, color: '#1e293b', fontWeight: '600' },
-    button: { backgroundColor: '#2563eb', padding: 18, borderRadius: 15, alignItems: 'center' },
-    buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
+    footer: { 
+        backgroundColor: '#fff', paddingHorizontal: 25, paddingTop: 25, 
+        borderTopLeftRadius: 30, borderTopRightRadius: 30, 
+        shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 10 
+    },
+    enderecoLabel: { fontWeight: '800', color: '#94a3b8', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
+    enderecoText: { fontSize: 18, marginVertical: 12, color: '#1e293b', fontWeight: '600' },
+    button: { backgroundColor: '#2563eb', padding: 18, borderRadius: 15, alignItems: 'center', shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5, marginTop: 5 },
+    buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 0.5 }
 });

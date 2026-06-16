@@ -1,7 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { API_URL } from '../config/config';
 
@@ -14,6 +16,8 @@ type Passageiro = {
 
 export default function Mapa() {
     const webViewRef = useRef<WebView>(null);
+    const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { sentido } = useLocalSearchParams<{ sentido: string }>(); 
     const direcao = sentido || 'ida'; 
 
@@ -139,7 +143,7 @@ export default function Mapa() {
                 var startLat = ${localizacao?.latitude ?? garagem.latitude};
                 var startLng = ${localizacao?.longitude ?? garagem.longitude};
                 
-                var map = L.map('map').setView([startLat, startLng], 14);
+                var map = L.map('map', { zoomControl: false }).setView([startLat, startLng], 14);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
                 
                 var polyline = L.polyline([], {color: '#2563eb', weight: 8, opacity: 0.7, lineJoin: 'round'}).addTo(map);
@@ -173,7 +177,6 @@ export default function Mapa() {
                     return pontos.join(';'); 
                 }
 
-                // CORREÇÃO: vanMarker inicia nulo para evitar ícone fantasma
                 var vanMarker = null;
 
                 function atualizarVan(pos) {
@@ -184,7 +187,6 @@ export default function Mapa() {
                     }
                 }
 
-                // Se já tivermos localização real, desenha, caso contrário, espera o sinal
                 if (${localizacao !== null ? 'true' : 'false'}) {
                     atualizarVan([startLat, startLng]);
                 }
@@ -206,25 +208,34 @@ export default function Mapa() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.badgeSentido}>
-                <Text style={styles.textoBadge}>ROTA DE {direcao.toUpperCase()}</Text>
+            <View style={[styles.headerOverlay, { top: insets.top + 10 }]}>
+                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                    <Ionicons name="arrow-back" size={24} color="#1e293b" />
+                </TouchableOpacity>
+                <View style={styles.badgeSentido}>
+                    <Text style={styles.textoBadge}>ROTA DE {direcao.toUpperCase()}</Text>
+                </View>
             </View>
+            
             <WebView 
                 ref={webViewRef}
                 originWhitelist={['*']} 
                 source={{ html: htmlDoMapa }} 
                 style={styles.map} 
                 javaScriptEnabled={true}
+                bounces={false}
             />
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#000' },
+    container: { flex: 1, backgroundColor: '#f8fafc' },
     map: { flex: 1 },
-    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' },
-    loadingText: { color: '#ffffff', fontSize: 16, marginTop: 15, fontWeight: '500' },
-    badgeSentido: { position: 'absolute', top: 40, left: 20, right: 20, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, borderRadius: 8, zIndex: 10, alignItems: 'center' },
-    textoBadge: { color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 }
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
+    loadingText: { color: '#64748b', fontSize: 16, marginTop: 15, fontWeight: '600' },
+    headerOverlay: { position: 'absolute', left: 20, right: 20, zIndex: 10, flexDirection: 'row', alignItems: 'center', gap: 15 },
+    backButton: { width: 45, height: 45, backgroundColor: '#fff', borderRadius: 25, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 5 },
+    badgeSentido: { flex: 1, backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 25, alignItems: 'center', shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+    textoBadge: { color: '#fff', fontWeight: '800', fontSize: 14, letterSpacing: 1 }
 });

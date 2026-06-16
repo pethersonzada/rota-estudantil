@@ -2,11 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, SafeAreaView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { API_URL } from '.././config/config';
+import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { TextInputMask } from 'react-native-masked-text';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { API_URL } from '../config/config';
 
 export default function Login() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const [cpf, setCpf] = useState('');
     const [senha, setSenha] = useState('');
     const [loading, setLoading] = useState(false);
@@ -19,13 +22,15 @@ export default function Login() {
 
         setLoading(true);
         try {
+            const cpfLimpo = cpf.replace(/\D/g, '');
+
             const response = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Bypass-Tunnel-Reminder': 'true' 
                 },
-                body: JSON.stringify({ cpf, senha })
+                body: JSON.stringify({ cpf: cpfLimpo, senha: senha })
             });
 
             if (response.ok) {
@@ -47,25 +52,30 @@ export default function Login() {
     }
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
+        <View style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
             
-            <View style={styles.content}>
+            <ScrollView 
+                contentContainerStyle={[styles.content, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 40 }]} 
+                showsVerticalScrollIndicator={false}
+            >
                 <View style={styles.logoBox}>
                     <Ionicons name="bus" size={48} color="#2563eb" />
                 </View>
 
-                <Text style={styles.title}>Bem-vindo de volta</Text>
+                <Text style={styles.title}>Bem-vindo de Volta!</Text>
                 <Text style={styles.subtitle}>Entre com seus dados para acessar o sistema.</Text>
 
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>CPF</Text>
-                    <TextInput 
+                    <TextInputMask 
+                        type={'cpf'}
                         style={styles.input} 
                         placeholder="000.000.000-00"
+                        placeholderTextColor="#94a3b8"
                         keyboardType="numeric"
                         value={cpf}
-                        onChangeText={setCpf}
+                        onChangeText={(text) => setCpf(text)}
                     />
                 </View>
 
@@ -74,6 +84,7 @@ export default function Login() {
                     <TextInput 
                         style={styles.input} 
                         placeholder="••••••"
+                        placeholderTextColor="#94a3b8"
                         secureTextEntry
                         value={senha}
                         onChangeText={setSenha}
@@ -100,30 +111,33 @@ export default function Login() {
                         </TouchableOpacity>
                     </View>
                 </View>
-            </View>
-        </SafeAreaView>
+            </ScrollView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f8fafc', justifyContent: 'center' },
-    content: { padding: 30 },
+    container: { flex: 1, backgroundColor: '#f8fafc' },
+    content: { padding: 30, flexGrow: 1, justifyContent: 'center' },
     logoBox: { 
         width: 90, height: 90, backgroundColor: '#eff6ff', 
-        borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 30 
+        borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 30, alignSelf: 'center',
+        borderWidth: 1, borderColor: '#dbeafe'
     },
-    title: { fontSize: 32, fontWeight: '800', color: '#1e293b', marginBottom: 10 },
-    subtitle: { fontSize: 16, color: '#64748b', marginBottom: 40, lineHeight: 24 },
+    title: { fontSize: 32, fontWeight: '800', color: '#1e293b', marginBottom: 10, textAlign: 'center' },
+    subtitle: { fontSize: 16, color: '#64748b', marginBottom: 40, lineHeight: 24, textAlign: 'center' },
     inputGroup: { marginBottom: 20 },
     label: { fontSize: 13, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 0.5 },
     input: { 
         backgroundColor: '#ffffff', padding: 18, borderRadius: 15, fontSize: 16, 
-        borderWidth: 1, borderColor: '#e2e8f0', color: '#1e293b' 
+        borderWidth: 1, borderColor: '#e2e8f0', color: '#1e293b'
     },
-    button: { backgroundColor: '#2563eb', padding: 18, borderRadius: 15, alignItems: 'center', marginTop: 10 },
+    button: { 
+        backgroundColor: '#2563eb', padding: 18, borderRadius: 15, alignItems: 'center', marginTop: 10 
+    },
     buttonText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
-    registerContainer: { marginTop: 30, alignItems: 'center' },
-    row: { flexDirection: 'row', marginTop: 5 },
+    registerContainer: { marginTop: 40, alignItems: 'center' },
+    row: { flexDirection: 'row', marginTop: 8, alignItems: 'center' },
     text: { color: "#64748b", fontSize: 14 },
     linkText: { color: "#2563eb", fontWeight: "bold", fontSize: 14, marginHorizontal: 5 }
 });
