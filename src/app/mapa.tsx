@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { API_URL } from '../config/config';
@@ -19,30 +20,48 @@ export default function Mapa() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { sentido } = useLocalSearchParams<{ sentido: string }>(); 
-    const direcao = sentido || 'ida'; 
-
+    
+    // Estados base
+    const [direcaoAtual, setDirecaoAtual] = useState(sentido || 'ida'); 
     const [localizacao, setLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
     const [rota, setRota] = useState<Passageiro[]>([]);
     const [garagem, setGaragem] = useState<{ latitude: number; longitude: number } | null>(null);
     const [loading, setLoading] = useState(true);
+    
+    // Máquina de Estados blindada
+    const [viagemAtiva, setViagemAtiva] = useState(false);
+    const [motoristaId, setMotoristaId] = useState<string | null>(null);
 
     useEffect(() => {
         let locationSubscription: Location.LocationSubscription | null = null;
 
         const iniciarSistema = async () => {
             try {
+                const idSaved = await AsyncStorage.getItem('userId');
+                setMotoristaId(idSaved);
+
+                // 1. A BÚSSOLA: Pergunta ao banco se a viagem já está rolando
+                let direcaoDefinitiva = sentido || 'ida';
+                const resStatus = await fetch(`${API_URL}/rota/status-atual`);
+                if (resStatus.ok) {
+                    const dataStatus = await resStatus.json();
+                    if (dataStatus.status === 'ATIVA') {
+                        setViagemAtiva(true);
+                        if (dataStatus.sentido) {
+                            direcaoDefinitiva = dataStatus.sentido.toLowerCase();
+                            setDirecaoAtual(direcaoDefinitiva);
+                        }
+                    }
+                }
+
+                // 2. Inicia o GPS
                 const { status } = await Location.requestForegroundPermissionsAsync();
                 if (status === 'granted') {
                     locationSubscription = await Location.watchPositionAsync(
-                        { 
-                            accuracy: Location.Accuracy.High, 
-                            timeInterval: 5000, 
-                            distanceInterval: 5 
-                        },
+                        { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 5 },
                         async (loc) => {
                             const lat = loc.coords.latitude;
                             const lng = loc.coords.longitude;
-                            
                             setLocalizacao({ latitude: lat, longitude: lng });
 
                             try {
@@ -50,15 +69,15 @@ export default function Mapa() {
                                     method: 'POST',
                                     headers: { 'Accept': 'application/json' }
                                 });
-                            } catch (e) {
-                                console.log("Falha na transmissão silenciada. Verifique a rede.");
-                            }
+                            } catch (e) {}
                         }
                     );
                 }
-                await carregarDadosDinamicamente();
+                
+                // 3. Carrega os dados usando a direção correta (da URL ou do Banco)
+                await carregarDadosDinamicamente(direcaoDefinitiva);
             } catch (error) {
-                console.error("Erro no GPS:", error);
+                console.error("Erro no sistema:", error);
             } finally {
                 setLoading(false);
             }
@@ -67,9 +86,7 @@ export default function Mapa() {
         iniciarSistema();
 
         return () => {
-            if (locationSubscription) {
-                locationSubscription.remove();
-            }
+            if (locationSubscription) locationSubscription.remove();
         };
     }, []);
 
@@ -82,29 +99,78 @@ export default function Mapa() {
         }
     }, [localizacao]);
 
-    async function carregarDadosDinamicamente() {
-        setLoading(true);
+    async function carregarDadosDinamicamente(direcaoUsada: string) {
         try {
-            const resMotorista = await fetch(`${API_URL}/usuarios/motorista`, {
-                headers: { 'bypass-tunnel-reminder': 'true' }
-            });
-            
+            const resMotorista = await fetch(`${API_URL}/usuarios/motorista`, { headers: { 'bypass-tunnel-reminder': 'true' } });
             if (!resMotorista.ok) return;
             const dadosMotorista = await resMotorista.json();
             setGaragem({ latitude: dadosMotorista.latitude, longitude: dadosMotorista.longitude });
 
-            const resRota = await fetch(`${API_URL}/rota/otimizar/${dadosMotorista.id}?sentido=${direcao}`, {
-                headers: { 'bypass-tunnel-reminder': 'true' }
-            });
-            
+            const resRota = await fetch(`${API_URL}/rota/otimizar/${dadosMotorista.id}?sentido=${direcaoUsada}`, { headers: { 'bypass-tunnel-reminder': 'true' } });
             if (resRota.ok) {
                 const dadosRota = await resRota.json();
                 setRota(dadosRota);
             }
         } catch (error) {
             console.log("Erro ao conectar com a base.");
-        } finally {
-            setLoading(false);
+        }
+    }
+
+    async function handleIniciarViagem() {
+        if (!motoristaId) return;
+        try {
+            const response = await fetch(`${API_URL}/rota/iniciar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ motoristaId: motoristaId, sentido: direcaoAtual.toUpperCase() }) 
+            });
+            
+            if (response.ok) {
+                setViagemAtiva(true);
+                Alert.alert("Pé na estrada", "Viagem iniciada. O radar agora está visível para os alunos.");
+            } else {
+                const data = await response.json();
+                Alert.alert("Atenção", data.erro || "Falha ao iniciar rota.");
+            }
+        } catch (error) {
+            Alert.alert("Erro", "Falha de conexão com o servidor.");
+        }
+    }
+
+    async function handleEncerrarViagem() {
+        Alert.alert(
+            "Finalizar Trajeto",
+            "Todos os alunos já desembarcaram?",
+            [
+                { text: "Cancelar", style: "cancel" },
+                { text: "Encerrar Viagem", style: 'destructive', onPress: async () => {
+                    try {
+                        const response = await fetch(`${API_URL}/rota/encerrar`, { method: 'POST' });
+                        if (response.ok) {
+                            setViagemAtiva(false);
+                            Alert.alert("Fim de linha", "Viagem encerrada com sucesso.");
+                            router.replace('/(tabs)/home');
+                        }
+                    } catch (error) {
+                        Alert.alert("Erro", "Não foi possível encerrar a viagem.");
+                    }
+                }}
+            ]
+        );
+    }
+
+    function handleVoltar() {
+        if (viagemAtiva) {
+            Alert.alert(
+                "Atenção",
+                "A viagem está em andamento. Deseja sair do mapa?",
+                [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Sair", style: 'destructive', onPress: () => router.back() }
+                ]
+            );
+        } else {
+            router.back();
         }
     }
 
@@ -112,7 +178,7 @@ export default function Mapa() {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#2563eb" />
-                <Text style={styles.loadingText}>Traçando rota de {direcao.toUpperCase()}...</Text>
+                <Text style={styles.loadingText}>Sincronizando com o servidor...</Text>
             </View>
         );
     }
@@ -152,7 +218,7 @@ export default function Mapa() {
                 var casaMotorista = [${garagem.latitude}, ${garagem.longitude}]; 
                 var uniCaruaru = [-8.302755, -35.991248]; 
 
-                var sentidoAtual = "${direcao}"; 
+                var sentidoAtual = "${direcaoAtual}"; 
 
                 L.marker(casaMotorista).addTo(map).bindPopup("<b>🏠 Garagem</b>");
                 L.marker(uniCaruaru, {
@@ -209,11 +275,11 @@ export default function Mapa() {
     return (
         <View style={styles.container}>
             <View style={[styles.headerOverlay, { top: insets.top + 10 }]}>
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                <TouchableOpacity style={styles.backButton} onPress={handleVoltar}>
                     <Ionicons name="arrow-back" size={24} color="#1e293b" />
                 </TouchableOpacity>
                 <View style={styles.badgeSentido}>
-                    <Text style={styles.textoBadge}>ROTA DE {direcao.toUpperCase()}</Text>
+                    <Text style={styles.textoBadge}>ROTA DE {direcaoAtual.toUpperCase()}</Text>
                 </View>
             </View>
             
@@ -225,6 +291,20 @@ export default function Mapa() {
                 javaScriptEnabled={true}
                 bounces={false}
             />
+
+            <View style={[styles.footerAcoes, { bottom: insets.bottom + 20 }]}>
+                {!viagemAtiva ? (
+                    <TouchableOpacity style={styles.btnIniciar} onPress={handleIniciarViagem}>
+                        <Ionicons name="play" size={20} color="#fff" style={{ marginRight: 8 }} />
+                        <Text style={styles.btnText}>INICIAR ROTA</Text>
+                    </TouchableOpacity>
+                ) : (
+                    <TouchableOpacity style={styles.btnEncerrar} onPress={handleEncerrarViagem}>
+                        <Ionicons name="stop" size={20} color="#fff" style={{ marginRight: 8 }} />
+                        <Text style={styles.btnText}>ENCERRAR ROTA</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
         </View>
     );
 }
@@ -235,7 +315,11 @@ const styles = StyleSheet.create({
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
     loadingText: { color: '#64748b', fontSize: 16, marginTop: 15, fontWeight: '600' },
     headerOverlay: { position: 'absolute', left: 20, right: 20, zIndex: 10, flexDirection: 'row', alignItems: 'center', gap: 15 },
-    backButton: { width: 45, height: 45, backgroundColor: '#fff', borderRadius: 25, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 5 },
-    badgeSentido: { flex: 1, backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 25, alignItems: 'center', shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
-    textoBadge: { color: '#fff', fontWeight: '800', fontSize: 14, letterSpacing: 1 }
+    backButton: { width: 45, height: 45, backgroundColor: '#fff', borderRadius: 25, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+    badgeSentido: { flex: 1, backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 25, alignItems: 'center' },
+    textoBadge: { color: '#fff', fontWeight: '800', fontSize: 14, letterSpacing: 1 },
+    footerAcoes: { position: 'absolute', left: 20, right: 20, zIndex: 10 },
+    btnIniciar: { flexDirection: 'row', backgroundColor: '#10b981', padding: 20, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#059669' },
+    btnEncerrar: { flexDirection: 'row', backgroundColor: '#ef4444', padding: 20, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#dc2626' },
+    btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 }
 });

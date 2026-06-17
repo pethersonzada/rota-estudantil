@@ -12,12 +12,16 @@ export default function HomePassageiro() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const vanMapRef = useRef<WebView>(null);
+    
     const [loading, setLoading] = useState(true);
     const [nome, setNome] = useState('');
     const [temEndereco, setTemEndereco] = useState(true);
     const [statusConfirmado, setStatusConfirmado] = useState<string>('');
     const [sinalPerdido, setSinalPerdido] = useState(false);
     const [minhaLocalizacao, setMinhaLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
+    
+    // O novo estado que controla o cadeado
+    const [statusViagem, setStatusViagem] = useState<'INATIVA' | 'ATIVA'>('INATIVA');
 
     useEffect(() => {
         carregarDados();
@@ -27,33 +31,49 @@ export default function HomePassageiro() {
         let errosConsecutivos = 0;
         const intervalo = window.setInterval(async () => {
             try {
-                const res = await fetch(`${API_URL}/rota/localizacao-van`, {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' }
-                });
+                // 1. O Vigia pergunta: A viagem começou?
+                const resStatus = await fetch(`${API_URL}/rota/status-atual`);
+                if (!resStatus.ok) throw new Error('Falha no status');
+                const dataStatus = await resStatus.json();
                 
-                if (res.ok) {
-                    errosConsecutivos = 0;
-                    setSinalPerdido(false);
-                    const dadosVan = await res.json();
-                    if (dadosVan && dadosVan.latitude && dadosVan.longitude) {
-                        simularMovimentoDaVan(dadosVan.latitude, dadosVan.longitude);
+                setStatusViagem(dataStatus.status);
+
+                // 2. Se a porta abriu, buscamos a coordenada
+                if (dataStatus.status === 'ATIVA') {
+                    const resLoc = await fetch(`${API_URL}/rota/localizacao-van`, {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    
+                    if (resLoc.ok) {
+                        errosConsecutivos = 0;
+                        setSinalPerdido(false);
+                        const dadosVan = await resLoc.json();
+                        if (dadosVan && dadosVan.latitude && dadosVan.longitude) {
+                            simularMovimentoDaVan(dadosVan.latitude, dadosVan.longitude);
+                        }
+                    } else {
+                        throw new Error('Sem sinal');
                     }
                 } else {
-                    throw new Error('Sem sinal');
+                    // Se inativa, não há sinal perdido, a van apenas não saiu
+                    setSinalPerdido(false);
                 }
             } catch (error) {
                 errosConsecutivos++;
-                if (errosConsecutivos > 3) setSinalPerdido(true);
+                // Só acusa sinal perdido se a viagem estiver ativa e o GPS falhar
+                if (errosConsecutivos > 3 && statusViagem === 'ATIVA') {
+                    setSinalPerdido(true);
+                }
             }
         }, 5000);
 
         return () => window.clearInterval(intervalo);
-    }, []);
+    }, [statusViagem]);
 
     const simularMovimentoDaVan = (lat: number, lng: number) => {
         if (vanMapRef.current) {
-            vanMapRef.current.injectJavaScript(`updateDriverLocation(${lat}, ${lng}); true;`);
+            vanMapRef.current.injectJavaScript(`if (typeof updateDriverLocation === 'function') { updateDriverLocation(${lat}, ${lng}); } true;`);
         }
     };
 
@@ -174,7 +194,7 @@ export default function HomePassageiro() {
 
                 <View style={styles.topoPassageiro}>
                     <Text style={styles.sectionTitleLeft}>Radar do Motorista</Text>
-                    {sinalPerdido && (
+                    {sinalPerdido && statusViagem === 'ATIVA' && (
                         <View style={styles.sinalPerdidoBadge}>
                             <Ionicons name="warning" size={14} color="#b91c1c" />
                             <Text style={styles.sinalPerdidoTexto}>Sinal perdido</Text>
@@ -182,8 +202,17 @@ export default function HomePassageiro() {
                     )}
                 </View>
 
+                {/* A Barreira de Segurança do Radar */}
                 <View style={styles.radarCard}>
-                    {minhaLocalizacao ? (
+                    {statusViagem === 'INATIVA' ? (
+                        <View style={styles.cadeadoBox}>
+                            <Ionicons name="bus-outline" size={50} color="#94a3b8" />
+                            <Text style={styles.cadeadoTitulo}>A van está na garagem</Text>
+                            <Text style={styles.cadeadoSubtitulo}>
+                                O motorista ainda não iniciou a rota de hoje. O radar aparecerá aqui quando a viagem começar.
+                            </Text>
+                        </View>
+                    ) : minhaLocalizacao ? (
                         <WebView ref={vanMapRef} source={{ html: mapHtml }} javaScriptEnabled={true} scrollEnabled={false} />
                     ) : (
                         <ActivityIndicator size="large" color="#2563eb" style={{ flex: 1 }} />
@@ -231,7 +260,12 @@ const styles = StyleSheet.create({
     sectionTitleLeft: { fontSize: 16, fontWeight: 'bold', color: '#334155' },
     sinalPerdidoBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fee2e2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, gap: 4 },
     sinalPerdidoTexto: { fontSize: 10, color: '#b91c1c', fontWeight: 'bold' },
-    radarCard: { height: 220, borderRadius: 20, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#e2e8f0', justifyContent: 'center' },
+    
+    radarCard: { height: 220, borderRadius: 20, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff', justifyContent: 'center' },
+    cadeadoBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#f8fafc' },
+    cadeadoTitulo: { fontSize: 18, fontWeight: '800', color: '#334155', marginTop: 10, marginBottom: 6 },
+    cadeadoSubtitulo: { fontSize: 13, color: '#64748b', textAlign: 'center', lineHeight: 20, paddingHorizontal: 10 },
+    
     infoCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#eff6ff', padding: 15, borderRadius: 15, marginBottom: 20 },
     infoCardText: { flex: 1, marginLeft: 10, color: '#1e40af', fontSize: 14 },
     cardConfirmado: { backgroundColor: '#fff', padding: 30, borderRadius: 25, alignItems: 'center' },
