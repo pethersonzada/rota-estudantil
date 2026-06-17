@@ -14,7 +14,6 @@ export default function HomeMotorista() {
     const [nome, setNome] = useState('');
     const [passageiros, setPassageiros] = useState<any[]>([]);
 
-    // O estado do Farol
     const [viagemAtiva, setViagemAtiva] = useState(false);
 
     useFocusEffect(
@@ -46,7 +45,6 @@ export default function HomeMotorista() {
         }
     }
 
-    // A Bússola: Verifica se ele deixou a van ligada na rua
     async function checarAmnesia() {
         try {
             const res = await fetch(`${API_URL}/rota/status-atual`);
@@ -72,7 +70,6 @@ export default function HomeMotorista() {
 
     const iniciarRota = (sentido: string) => {
         if (viagemAtiva) {
-            // Se já está rolando, só deixa entrar no mapa. O backend vai barrar iniciar de novo.
             router.push(`/mapa?sentido=${sentido.toLowerCase()}`);
             return;
         }
@@ -102,7 +99,6 @@ export default function HomeMotorista() {
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-                {/* O Farol Inignorável */}
                 {viagemAtiva && (
                     <TouchableOpacity
                         style={styles.bannerAtivo}

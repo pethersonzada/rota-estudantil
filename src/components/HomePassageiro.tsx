@@ -19,8 +19,7 @@ export default function HomePassageiro() {
     const [statusConfirmado, setStatusConfirmado] = useState<string>('');
     const [sinalPerdido, setSinalPerdido] = useState(false);
     const [minhaLocalizacao, setMinhaLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
-    
-    // O novo estado que controla o cadeado
+
     const [statusViagem, setStatusViagem] = useState<'INATIVA' | 'ATIVA'>('INATIVA');
 
     useEffect(() => {
@@ -31,14 +30,12 @@ export default function HomePassageiro() {
         let errosConsecutivos = 0;
         const intervalo = window.setInterval(async () => {
             try {
-                // 1. O Vigia pergunta: A viagem começou?
                 const resStatus = await fetch(`${API_URL}/rota/status-atual`);
                 if (!resStatus.ok) throw new Error('Falha no status');
                 const dataStatus = await resStatus.json();
                 
                 setStatusViagem(dataStatus.status);
 
-                // 2. Se a porta abriu, buscamos a coordenada
                 if (dataStatus.status === 'ATIVA') {
                     const resLoc = await fetch(`${API_URL}/rota/localizacao-van`, {
                         method: 'GET',
@@ -56,12 +53,10 @@ export default function HomePassageiro() {
                         throw new Error('Sem sinal');
                     }
                 } else {
-                    // Se inativa, não há sinal perdido, a van apenas não saiu
                     setSinalPerdido(false);
                 }
             } catch (error) {
                 errosConsecutivos++;
-                // Só acusa sinal perdido se a viagem estiver ativa e o GPS falhar
                 if (errosConsecutivos > 3 && statusViagem === 'ATIVA') {
                     setSinalPerdido(true);
                 }
@@ -202,7 +197,6 @@ export default function HomePassageiro() {
                     )}
                 </View>
 
-                {/* A Barreira de Segurança do Radar */}
                 <View style={styles.radarCard}>
                     {statusViagem === 'INATIVA' ? (
                         <View style={styles.cadeadoBox}>

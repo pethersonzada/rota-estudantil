@@ -21,14 +21,12 @@ export default function Mapa() {
     const insets = useSafeAreaInsets();
     const { sentido } = useLocalSearchParams<{ sentido: string }>(); 
     
-    // Estados base
     const [direcaoAtual, setDirecaoAtual] = useState(sentido || 'ida'); 
     const [localizacao, setLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
     const [rota, setRota] = useState<Passageiro[]>([]);
     const [garagem, setGaragem] = useState<{ latitude: number; longitude: number } | null>(null);
     const [loading, setLoading] = useState(true);
     
-    // Máquina de Estados blindada
     const [viagemAtiva, setViagemAtiva] = useState(false);
     const [motoristaId, setMotoristaId] = useState<string | null>(null);
 
@@ -40,7 +38,6 @@ export default function Mapa() {
                 const idSaved = await AsyncStorage.getItem('userId');
                 setMotoristaId(idSaved);
 
-                // 1. A BÚSSOLA: Pergunta ao banco se a viagem já está rolando
                 let direcaoDefinitiva = sentido || 'ida';
                 const resStatus = await fetch(`${API_URL}/rota/status-atual`);
                 if (resStatus.ok) {
@@ -54,7 +51,6 @@ export default function Mapa() {
                     }
                 }
 
-                // 2. Inicia o GPS
                 const { status } = await Location.requestForegroundPermissionsAsync();
                 if (status === 'granted') {
                     locationSubscription = await Location.watchPositionAsync(
@@ -74,7 +70,6 @@ export default function Mapa() {
                     );
                 }
                 
-                // 3. Carrega os dados usando a direção correta (da URL ou do Banco)
                 await carregarDadosDinamicamente(direcaoDefinitiva);
             } catch (error) {
                 console.error("Erro no sistema:", error);
