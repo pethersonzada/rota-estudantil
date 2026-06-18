@@ -92,6 +92,9 @@ export default function CadastroEndereco() {
                 body: JSON.stringify(payload)
             });
             if (response.ok) {
+                // A correção vital está aqui:
+                await AsyncStorage.setItem('userEndereco', enderecoCompleto);
+                
                 Alert.alert('Sucesso', 'Local definido!');
                 router.replace('/(tabs)/home');
             } else {

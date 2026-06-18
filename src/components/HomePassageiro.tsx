@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -24,15 +24,16 @@ export default function HomePassageiro() {
     const [nome, setNome] = useState('');
     const [temEndereco, setTemEndereco] = useState(true);
     const [statusConfirmado, setStatusConfirmado] = useState<string>('');
-    const [sinalPerdido, setSinalPerdido] = useState(false);
     const [minhaLocalizacao, setMinhaLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
 
     const [statusViagem, setStatusViagem] = useState<'INATIVA' | 'ATIVA'>('INATIVA');
-    const [statusGps, setStatusGps] = useState('Verificando conexão...');
+    const [statusGps, setStatusGps] = useState<'GARAGEM' | 'AGUARDANDO' | 'ONLINE' | 'ERRO'>('GARAGEM');
 
-    useEffect(() => {
-        carregarDados();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            carregarDados();
+        }, [])
+    );
 
     useEffect(() => {
         let errosConsecutivos = 0;
@@ -52,8 +53,7 @@ export default function HomePassageiro() {
                     
                     if (resLoc.ok) {
                         errosConsecutivos = 0;
-                        setSinalPerdido(false);
-                        setStatusGps('Sinal da van sincronizado');
+                        setStatusGps('ONLINE');
                         
                         const dadosVan = await resLoc.json();
                         if (dadosVan && dadosVan.latitude && dadosVan.longitude) {
@@ -61,20 +61,17 @@ export default function HomePassageiro() {
                         }
                     } else if (resLoc.status === 404) {
                         errosConsecutivos = 0;
-                        setSinalPerdido(false);
-                        setStatusGps('Aguardando celular do motorista enviar o GPS...');
+                        setStatusGps('AGUARDANDO');
                     } else {
                         throw new Error('Sem sinal');
                     }
                 } else {
-                    setSinalPerdido(false);
-                    setStatusGps('Van na garagem.');
+                    setStatusGps('GARAGEM');
                 }
             } catch (error) {
                 errosConsecutivos++;
                 if (errosConsecutivos > 3 && statusViagem === 'ATIVA') {
-                    setSinalPerdido(true);
-                    setStatusGps('❌ Conexão com o servidor perdida.');
+                    setStatusGps('ERRO');
                 }
             }
         }, 5000);
@@ -174,6 +171,40 @@ export default function HomePassageiro() {
         }
     }
 
+    const renderBadgeStatus = () => {
+        switch (statusGps) {
+            case 'ERRO':
+                return (
+                    <View style={[styles.badgeBase, styles.badgeErro]}>
+                        <Ionicons name="warning" size={12} color="#991b1b" />
+                        <Text style={[styles.badgeTexto, { color: '#991b1b' }]}>Sem Sinal</Text>
+                    </View>
+                );
+            case 'AGUARDANDO':
+                return (
+                    <View style={[styles.badgeBase, styles.badgeAlerta]}>
+                        <Ionicons name="time" size={12} color="#9a3412" />
+                        <Text style={[styles.badgeTexto, { color: '#9a3412' }]}>Aguardando...</Text>
+                    </View>
+                );
+            case 'ONLINE':
+                return (
+                    <View style={[styles.badgeBase, styles.badgeSucesso]}>
+                        <Ionicons name="radio" size={12} color="#166534" />
+                        <Text style={[styles.badgeTexto, { color: '#166534' }]}>Online</Text>
+                    </View>
+                );
+            case 'GARAGEM':
+            default:
+                return (
+                    <View style={[styles.badgeBase, styles.badgeInativo]}>
+                        <Ionicons name="bus" size={12} color="#475569" />
+                        <Text style={[styles.badgeTexto, { color: '#475569' }]}>Na Garagem</Text>
+                    </View>
+                );
+        }
+    };
+
     const mapHtml = useMemo(() => {
         if (!minhaLocalizacao) return '';
         return `
@@ -266,16 +297,8 @@ export default function HomePassageiro() {
                 )}
 
                 <View style={styles.topoPassageiro}>
-                    <View>
-                        <Text style={styles.sectionTitleLeft}>Radar do Motorista</Text>
-                        <Text style={styles.statusGpsText}>{statusGps}</Text>
-                    </View>
-                    {sinalPerdido && statusViagem === 'ATIVA' && (
-                        <View style={styles.sinalPerdidoBadge}>
-                            <Ionicons name="warning" size={14} color="#b91c1c" />
-                            <Text style={styles.sinalPerdidoTexto}>Sinal perdido</Text>
-                        </View>
-                    )}
+                    <Text style={styles.sectionTitleLeft}>Radar do Motorista</Text>
+                    {renderBadgeStatus()}
                 </View>
 
                 <View style={styles.radarCard}>
@@ -338,11 +361,16 @@ const styles = StyleSheet.create({
     bannerAlerta: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fee2e2', padding: 15, borderRadius: 15, marginBottom: 20, borderWidth: 1, borderColor: '#fecaca' },
     alertaTitulo: { fontWeight: 'bold', color: '#991b1b' },
     alertaTexto: { fontSize: 12, color: '#b91c1c' },
+    
     topoPassageiro: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
     sectionTitleLeft: { fontSize: 16, fontWeight: 'bold', color: '#334155' },
-    statusGpsText: { fontSize: 12, color: '#64748b', marginTop: 2 },
-    sinalPerdidoBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fee2e2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, gap: 4 },
-    sinalPerdidoTexto: { fontSize: 10, color: '#b91c1c', fontWeight: 'bold' },
+    
+    badgeBase: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, gap: 4, borderWidth: 1 },
+    badgeTexto: { fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' },
+    badgeInativo: { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' },
+    badgeAlerta: { backgroundColor: '#ffedd5', borderColor: '#fed7aa' },
+    badgeSucesso: { backgroundColor: '#dcfce7', borderColor: '#bbf7d0' },
+    badgeErro: { backgroundColor: '#fee2e2', borderColor: '#fecaca' },
     
     radarCard: { height: 220, borderRadius: 20, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff', justifyContent: 'center' },
     cadeadoBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#f8fafc' },

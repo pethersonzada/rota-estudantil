@@ -98,27 +98,75 @@ export default function Signup() {
 
                     <View style={styles.inputContainer}>
                         <Ionicons name="person-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
-                        <TextInput style={styles.input} placeholder="Nome Completo" placeholderTextColor="#94a3b8" onChangeText={setNome} />
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="Nome Completo" 
+                            placeholderTextColor="#94a3b8" 
+                            onChangeText={setNome} 
+                            autoComplete="name"
+                            textContentType="name"
+                        />
                     </View>
 
                     <View style={styles.inputContainer}>
                         <Ionicons name="card-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
-                        <TextInputMask type={'cpf'} style={styles.input} placeholder="CPF" placeholderTextColor="#94a3b8" keyboardType="numeric" value={cpf} onChangeText={setCpf} />
+                        <TextInputMask 
+                            type={'cpf'} 
+                            style={styles.input} 
+                            placeholder="CPF" 
+                            placeholderTextColor="#94a3b8" 
+                            keyboardType="numeric" 
+                            value={cpf} 
+                            onChangeText={setCpf} 
+                            autoComplete="username"
+                            textContentType="username"
+                            importantForAutofill="yes"
+                        />
                     </View>
 
                     <View style={styles.inputContainer}>
                         <Ionicons name="call-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
-                        <TextInputMask type={'cel-phone'} options={{ withDDD: true, dddMask: '(99) ' }} style={styles.input} placeholderTextColor="#94a3b8" placeholder="Telefone" keyboardType="numeric" value={telefone} onChangeText={setTelefone} />
+                        <TextInputMask 
+                            type={'cel-phone'} 
+                            options={{ withDDD: true, dddMask: '(99) ' }} 
+                            style={styles.input} 
+                            placeholderTextColor="#94a3b8" 
+                            placeholder="Telefone" 
+                            keyboardType="numeric" 
+                            value={telefone} 
+                            onChangeText={setTelefone} 
+                            autoComplete="tel"
+                            textContentType="telephoneNumber"
+                            importantForAutofill="no"
+                        />
                     </View>
 
                     <View style={styles.inputContainer}>
                         <Ionicons name="lock-closed-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
-                        <TextInput style={styles.input} placeholder="Senha" placeholderTextColor="#94a3b8" secureTextEntry={!showSenha} onChangeText={setSenha} />
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="Senha" 
+                            placeholderTextColor="#94a3b8" 
+                            secureTextEntry={!showSenha} 
+                            onChangeText={setSenha} 
+                            autoComplete="new-password"
+                            textContentType="newPassword"
+                            importantForAutofill="yes"
+                        />
                     </View>
 
                     <View style={styles.inputContainer}>
                         <Ionicons name="lock-closed-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
-                        <TextInput style={styles.input} placeholder="Confirmar Senha" placeholderTextColor="#94a3b8" secureTextEntry={!showSenha} onChangeText={setConfirmaSenha} />
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="Confirmar Senha" 
+                            placeholderTextColor="#94a3b8" 
+                            secureTextEntry={!showSenha} 
+                            onChangeText={setConfirmaSenha} 
+                            autoComplete="new-password"
+                            textContentType="newPassword"
+                            importantForAutofill="no"
+                        />
                         <TouchableOpacity onPress={() => setShowSenha(!showSenha)} style={styles.eyeIcon}>
                             <Ionicons name={showSenha ? "eye-off" : "eye"} size={20} color="#94a3b8" />
                         </TouchableOpacity>
