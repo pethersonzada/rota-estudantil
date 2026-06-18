@@ -8,6 +8,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { API_URL } from '../config/config';
 
+type Passageiro = {
+    id: number;
+    nome: string;
+    latitude: number;
+    longitude: number;
+};
+
 export default function HomePassageiro() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
@@ -21,6 +28,7 @@ export default function HomePassageiro() {
     const [minhaLocalizacao, setMinhaLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
 
     const [statusViagem, setStatusViagem] = useState<'INATIVA' | 'ATIVA'>('INATIVA');
+    const [statusGps, setStatusGps] = useState('Verificando conexão...');
 
     useEffect(() => {
         carregarDados();
@@ -28,7 +36,7 @@ export default function HomePassageiro() {
 
     useEffect(() => {
         let errosConsecutivos = 0;
-        const intervalo = window.setInterval(async () => {
+        const intervalo = setInterval(async () => {
             try {
                 const resStatus = await fetch(`${API_URL}/rota/status-atual`);
                 if (!resStatus.ok) throw new Error('Falha no status');
@@ -45,65 +53,103 @@ export default function HomePassageiro() {
                     if (resLoc.ok) {
                         errosConsecutivos = 0;
                         setSinalPerdido(false);
+                        setStatusGps('Sinal da van sincronizado');
+                        
                         const dadosVan = await resLoc.json();
                         if (dadosVan && dadosVan.latitude && dadosVan.longitude) {
                             simularMovimentoDaVan(dadosVan.latitude, dadosVan.longitude);
                         }
+                    } else if (resLoc.status === 404) {
+                        errosConsecutivos = 0;
+                        setSinalPerdido(false);
+                        setStatusGps('Aguardando celular do motorista enviar o GPS...');
                     } else {
                         throw new Error('Sem sinal');
                     }
                 } else {
                     setSinalPerdido(false);
+                    setStatusGps('Van na garagem.');
                 }
             } catch (error) {
                 errosConsecutivos++;
                 if (errosConsecutivos > 3 && statusViagem === 'ATIVA') {
                     setSinalPerdido(true);
+                    setStatusGps('❌ Conexão com o servidor perdida.');
                 }
             }
         }, 5000);
 
-        return () => window.clearInterval(intervalo);
+        return () => clearInterval(intervalo);
     }, [statusViagem]);
 
     const simularMovimentoDaVan = (lat: number, lng: number) => {
         if (vanMapRef.current) {
-            vanMapRef.current.injectJavaScript(`if (typeof updateDriverLocation === 'function') { updateDriverLocation(${lat}, ${lng}); } true;`);
+            vanMapRef.current.injectJavaScript(`
+                try {
+                    if (typeof updateDriverLocation === 'function') { 
+                        updateDriverLocation(${lat}, ${lng}); 
+                    }
+                } catch(e) {}
+                true;
+            `);
         }
     };
 
     async function carregarDados() {
-        setLoading(true);
-        const userName = await AsyncStorage.getItem('userName') || 'Usuário';
-        const end = await AsyncStorage.getItem('userEndereco') || '';
-        const id = await AsyncStorage.getItem('userId');
-        
-        setNome(userName.split(' ')[0]);
-        setTemEndereco(end !== '' && end !== 'Endereço Pendente');
-
         try {
-            const res = await fetch(`${API_URL}/usuarios/passageiros`, { method: 'GET', headers: { 'Accept': 'application/json' } });
-            if (res.ok) {
-                const data = await res.json();
-                const meuStatus = data.find((p: any) => p.id.toString() === id);
-                setStatusConfirmado(meuStatus?.status || '');
-            }
-        } catch (e) {
-            console.log("Erro ao buscar status");
-        }
+            const [userName, end, id] = await Promise.all([
+                AsyncStorage.getItem('userName'),
+                AsyncStorage.getItem('userEndereco'),
+                AsyncStorage.getItem('userId')
+            ]);
+            
+            const nomeUsuario = userName || 'Usuário';
+            const enderecoUsuario = end || '';
+            
+            setNome(nomeUsuario.split(' ')[0]);
+            setTemEndereco(enderecoUsuario !== '' && enderecoUsuario !== 'Endereço Pendente');
+            
+            setLoading(false);
 
-        try {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === 'granted') {
-                let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-                setMinhaLocalizacao({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-            } else {
-                setMinhaLocalizacao({ latitude: -8.2336, longitude: -35.7958 });
-            }
-        } catch (e) {
-            setMinhaLocalizacao({ latitude: -8.2336, longitude: -35.7958 });
+            const carregarStatusRemoto = async () => {
+                if (!id) return;
+                try {
+                    const res = await fetch(`${API_URL}/usuarios/passageiros`, { method: 'GET', headers: { 'Accept': 'application/json' } });
+                    if (res.ok) {
+                        const data = await res.json();
+                        const meuStatus = data.find((p: any) => p.id.toString() === id);
+                        setStatusConfirmado(meuStatus?.status || '');
+                    }
+                } catch (e) {
+                    console.log("Erro ao buscar status");
+                }
+            };
+
+            const carregarGpsHardware = async () => {
+                try {
+                    const { status } = await Location.requestForegroundPermissionsAsync();
+                    if (status === 'granted') {
+                        const cacheLoc = await Location.getLastKnownPositionAsync({});
+                        if (cacheLoc) {
+                            setMinhaLocalizacao({ latitude: cacheLoc.coords.latitude, longitude: cacheLoc.coords.longitude });
+                        }
+                        
+                        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                        setMinhaLocalizacao({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+                    } else {
+                        setMinhaLocalizacao({ latitude: -8.2336, longitude: -35.7958 });
+                    }
+                } catch (e) {
+                    setMinhaLocalizacao({ latitude: -8.2336, longitude: -35.7958 });
+                }
+            };
+
+            Promise.all([carregarStatusRemoto(), carregarGpsHardware()]);
+
+        } catch (error) {
+            console.error("Erro na carga inicial:", error);
+            setLoading(false);
         }
-        setLoading(false);
     }
 
     async function registrarPresenca(status: string) {
@@ -137,30 +183,62 @@ export default function HomePassageiro() {
             <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
             <style>
                 body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; }
-                #map { height: 100vh; width: 100vw; position: absolute; top: 0; left: 0; }
-                .van-icon { font-size: 30px; text-align: center; }
+                #map { height: 100vh; width: 100vw; position: absolute; top: 0; left: 0; touch-action: none; }
+                .pin-waypoint {
+                    width: 30px;
+                    height: 30px;
+                    background: #2563eb; 
+                    border: 2px solid #ffffff;
+                    border-radius: 50% 50% 50% 0; 
+                    transform: rotate(-45deg); 
+                    box-shadow: -2px 2px 5px rgba(0,0,0,0.4);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                }
+                .pin-waypoint span {
+                    transform: rotate(45deg);
+                    font-size: 14px;
+                }
             </style></head>
             <body>
                 <div id="map"></div>
                 <script>
                     var map = L.map('map', {
-                        zoomControl: false, dragging: false, tap: false, 
-                        touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false
+                        zoomControl: false, 
+                        dragging: true, 
+                        tap: true, 
+                        touchZoom: true, 
+                        scrollWheelZoom: true, 
+                        doubleClickZoom: true
                     }).setView([${minhaLocalizacao.latitude}, ${minhaLocalizacao.longitude}], 15);
                     
                     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
                     
-                    var vanIcon = L.divIcon({ html: '🚐', className: 'van-icon', iconSize: [30, 30], iconAnchor: [15, 15] });
+                    var vanIcon = L.divIcon({ 
+                        html: '<div class="pin-waypoint"><span>🚐</span></div>', 
+                        className: '', 
+                        iconSize: [30, 30], 
+                        iconAnchor: [15, 34] 
+                    });
                     var driverMarker = null;
+                    var primeiraVez = true;
                     
                     L.circleMarker([${minhaLocalizacao.latitude}, ${minhaLocalizacao.longitude}], {
                         radius: 8, fillColor: "#2563eb", color: "#ffffff", weight: 2, opacity: 1, fillOpacity: 0.8
                     }).addTo(map);
 
                     function updateDriverLocation(lat, lng) {
-                        if (!driverMarker) driverMarker = L.marker([lat, lng], {icon: vanIcon}).addTo(map);
-                        else driverMarker.setLatLng([lat, lng]);
-                        map.panTo([lat, lng]); 
+                        if (!driverMarker) {
+                            driverMarker = L.marker([lat, lng], {icon: vanIcon}).addTo(map);
+                        } else {
+                            driverMarker.setLatLng([lat, lng]);
+                        }
+                        
+                        if (primeiraVez) {
+                            map.panTo([lat, lng]); 
+                            primeiraVez = false;
+                        }
                     }
                 </script>
             </body></html>`;
@@ -188,7 +266,10 @@ export default function HomePassageiro() {
                 )}
 
                 <View style={styles.topoPassageiro}>
-                    <Text style={styles.sectionTitleLeft}>Radar do Motorista</Text>
+                    <View>
+                        <Text style={styles.sectionTitleLeft}>Radar do Motorista</Text>
+                        <Text style={styles.statusGpsText}>{statusGps}</Text>
+                    </View>
                     {sinalPerdido && statusViagem === 'ATIVA' && (
                         <View style={styles.sinalPerdidoBadge}>
                             <Ionicons name="warning" size={14} color="#b91c1c" />
@@ -207,7 +288,14 @@ export default function HomePassageiro() {
                             </Text>
                         </View>
                     ) : minhaLocalizacao ? (
-                        <WebView ref={vanMapRef} source={{ html: mapHtml }} javaScriptEnabled={true} scrollEnabled={false} />
+                        <WebView 
+                            ref={vanMapRef} 
+                            source={{ html: mapHtml }} 
+                            javaScriptEnabled={true} 
+                            scrollEnabled={false} 
+                            nestedScrollEnabled={true}
+                            overScrollMode="never"
+                        />
                     ) : (
                         <ActivityIndicator size="large" color="#2563eb" style={{ flex: 1 }} />
                     )}
@@ -252,6 +340,7 @@ const styles = StyleSheet.create({
     alertaTexto: { fontSize: 12, color: '#b91c1c' },
     topoPassageiro: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
     sectionTitleLeft: { fontSize: 16, fontWeight: 'bold', color: '#334155' },
+    statusGpsText: { fontSize: 12, color: '#64748b', marginTop: 2 },
     sinalPerdidoBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fee2e2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, gap: 4 },
     sinalPerdidoTexto: { fontSize: 10, color: '#b91c1c', fontWeight: 'bold' },
     

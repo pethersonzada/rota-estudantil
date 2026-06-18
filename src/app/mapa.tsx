@@ -192,6 +192,17 @@ export default function Mapa() {
         }
     }
 
+    function centralizarNaVan() {
+        if (webViewRef.current) {
+            webViewRef.current.injectJavaScript(`
+                if (typeof vanMarker !== 'undefined' && vanMarker) {
+                    map.setView(vanMarker.getLatLng(), 15);
+                }
+                true;
+            `);
+        }
+    }
+
     if (loading || !garagem) {
         return (
             <View style={styles.loadingContainer}>
@@ -210,7 +221,8 @@ export default function Mapa() {
             <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
             <style>
                 body { padding: 0; margin: 0; }
-                #map { height: 100vh; width: 100vw; }
+                /* O touch-action: none é o segredo para o Leaflet dominar os toques no mobile */
+                #map { height: 100vh; width: 100vw; touch-action: none; }
                 .van-icon { font-size: 24px; text-align: center; }
             </style>
         </head>
@@ -227,7 +239,7 @@ export default function Mapa() {
                 var startLat = ${localizacao?.latitude ?? garagem.latitude};
                 var startLng = ${localizacao?.longitude ?? garagem.longitude};
                 
-                var map = L.map('map', { zoomControl: false }).setView([startLat, startLng], 14);
+                var map = L.map('map', { zoomControl: false, dragging: true, tap: true }).setView([startLat, startLng], 14);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
                 
                 var polyline = L.polyline([], {color: '#2563eb', weight: 8, opacity: 0.7, lineJoin: 'round'}).addTo(map);
@@ -266,8 +278,9 @@ export default function Mapa() {
                 function atualizarVan(pos) {
                     if (!vanMarker) {
                         vanMarker = L.marker(pos, {icon: L.divIcon({html: '🚐', className: 'van-icon', iconSize: [30,30]})}).addTo(map);
+                        map.setView(pos, 15); // Centraliza só na primeira vez
                     } else {
-                        vanMarker.setLatLng(pos);
+                        vanMarker.setLatLng(pos); // Só move o marcador depois
                     }
                 }
 
@@ -308,7 +321,14 @@ export default function Mapa() {
                 style={styles.map} 
                 javaScriptEnabled={true}
                 bounces={false}
+                scrollEnabled={false} // TRAVA 1: Impede o React Native de roubar o gesto
+                overScrollMode="never"
+                nestedScrollEnabled={true}
             />
+
+            <TouchableOpacity style={styles.btnCentralizar} onPress={centralizarNaVan}>
+                <Ionicons name="locate" size={24} color="#fff" />
+            </TouchableOpacity>
 
             <View style={[styles.footerAcoes, { bottom: insets.bottom + 20 }]}>
                 {!viagemAtiva ? (
@@ -339,5 +359,22 @@ const styles = StyleSheet.create({
     footerAcoes: { position: 'absolute', left: 20, right: 20, zIndex: 10 },
     btnIniciar: { flexDirection: 'row', backgroundColor: '#10b981', padding: 20, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#059669' },
     btnEncerrar: { flexDirection: 'row', backgroundColor: '#ef4444', padding: 20, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#dc2626' },
-    btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 }
+    btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
+    btnCentralizar: {
+        position: 'absolute',
+        bottom: 130,
+        right: 20,
+        backgroundColor: '#2563eb',
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 5,
+        zIndex: 20
+    }
 });
