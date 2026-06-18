@@ -28,7 +28,7 @@ export default function Signup() {
             return;
         }
 
-        if (tipoUsuario === 'MOTORISTA' && codigoAcesso !== 'NOVO2026') {
+        if (tipoUsuario === 'MOTORISTA' && codigoAcesso !== 'ROTA2026') {
             Alert.alert("Acesso Restrito", "Código de motorista inválido.");
             return;
         }

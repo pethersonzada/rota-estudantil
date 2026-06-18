@@ -24,6 +24,24 @@ export default function Perfil() {
         Linking.openURL(url).catch(() => Alert.alert("Erro", "Não foi possível abrir o WhatsApp."));
     };
 
+    const handleLogout = () => {
+        Alert.alert(
+            "Encerrar Sessão",
+            "Você tem certeza que deseja sair do sistema?",
+            [
+                { text: "Cancelar", style: "cancel" },
+                { 
+                    text: "Sair", 
+                    style: "destructive", 
+                    onPress: async () => {
+                        await AsyncStorage.clear(); 
+                        router.replace('/login');
+                    }
+                }
+            ]
+        );
+    };
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -67,7 +85,7 @@ export default function Perfil() {
                     <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.botaoSair} onPress={() => router.replace('/login')}>
+                <TouchableOpacity style={styles.botaoSair} onPress={handleLogout}>
                     <Text style={styles.textoBotaoSair}>Encerrar Sessão</Text>
                 </TouchableOpacity>
             </ScrollView>

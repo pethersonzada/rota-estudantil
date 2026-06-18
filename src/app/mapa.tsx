@@ -95,41 +95,64 @@ export default function Mapa() {
     }, [localizacao]);
 
     async function carregarDadosDinamicamente(direcaoUsada: string) {
+        setLoading(true);
         try {
             const resMotorista = await fetch(`${API_URL}/usuarios/motorista`, { headers: { 'bypass-tunnel-reminder': 'true' } });
-            if (!resMotorista.ok) return;
+            if (!resMotorista.ok) throw new Error("Motorista não encontrado");
             const dadosMotorista = await resMotorista.json();
             setGaragem({ latitude: dadosMotorista.latitude, longitude: dadosMotorista.longitude });
 
-            const resRota = await fetch(`${API_URL}/rota/otimizar/${dadosMotorista.id}?sentido=${direcaoUsada}`, { headers: { 'bypass-tunnel-reminder': 'true' } });
+            const resRota = await fetch(`${API_URL}/rota/otimizar?sentido=${direcaoUsada}`, { 
+                headers: { 'bypass-tunnel-reminder': 'true' } 
+            });
+            
             if (resRota.ok) {
                 const dadosRota = await resRota.json();
                 setRota(dadosRota);
+            } else {
+                const erroData = await resRota.json();
+                Alert.alert("Atenção", erroData.erro || "Sem passageiros hoje.");
             }
         } catch (error) {
-            console.log("Erro ao conectar com a base.");
+            console.error("Erro na carga:", error);
+        } finally {
+            setLoading(false);
         }
     }
 
     async function handleIniciarViagem() {
         if (!motoristaId) return;
-        try {
-            const response = await fetch(`${API_URL}/rota/iniciar`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ motoristaId: motoristaId, sentido: direcaoAtual.toUpperCase() }) 
-            });
-            
-            if (response.ok) {
-                setViagemAtiva(true);
-                Alert.alert("Pé na estrada", "Viagem iniciada. O radar agora está visível para os alunos.");
-            } else {
-                const data = await response.json();
-                Alert.alert("Atenção", data.erro || "Falha ao iniciar rota.");
-            }
-        } catch (error) {
-            Alert.alert("Erro", "Falha de conexão com o servidor.");
-        }
+
+        Alert.alert(
+            "Iniciar Rota",
+            "Deseja iniciar a viagem agora? O trajeto ficará visível para os passageiros.",
+            [
+                { text: "Cancelar", style: "cancel" },
+                { 
+                    text: "Iniciar", 
+                    style: "default", 
+                    onPress: async () => {
+                        try {
+                            const response = await fetch(`${API_URL}/rota/iniciar`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ motoristaId: motoristaId, sentido: direcaoAtual.toUpperCase() }) 
+                            });
+                            
+                            if (response.ok) {
+                                setViagemAtiva(true);
+                                Alert.alert("Pé na estrada", "Viagem iniciada com sucesso.");
+                            } else {
+                                const data = await response.json();
+                                Alert.alert("Atenção", data.erro || "Falha ao iniciar rota.");
+                            }
+                        } catch (error) {
+                            Alert.alert("Erro", "Falha de conexão com o servidor.");
+                        }
+                    } 
+                }
+            ]
+        );
     }
 
     async function handleEncerrarViagem() {
