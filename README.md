@@ -22,3 +22,11 @@ Sistema de gestão de rotas para transporte escolar. Responsável pela persistê
 ## Visualizar o Backend da Aplicação
 
 https://github.com/pethersonzada/van-app-backend/
+
+## 🔒 Licença e Direitos Autorais
+
+Copyright (c) 2026 Miguel Petherson Silva. Todos os direitos reservados.
+
+Este software e sua documentação associada (o "Projeto Rota Estudantil") são de propriedade exclusiva do autor. 
+
+É expressamente proibida a cópia, modificação, distribuição, comercialização ou utilização total ou parcial deste código-fonte sem a autorização prévia e expressa por escrito do autor.
