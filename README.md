@@ -25,7 +25,7 @@ https://github.com/pethersonzada/van-app-backend/
 
 ## 🔒 Licença e Direitos Autorais
 
-Copyright (c) 2026 Miguel Petherson Silva. Todos os direitos reservados.
+Copyright© 2026 Miguel Petherson Silva. Todos os direitos reservados.
 
 Este software e sua documentação associada (o "Projeto Rota Estudantil") são de propriedade exclusiva do autor. 
 
