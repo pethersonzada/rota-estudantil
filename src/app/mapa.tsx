@@ -3,10 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { API_URL } from '../config/config';
+import { mapaStyles as styles } from '../constants/mapaStyles';
 
 type Passageiro = {
     id: number;
@@ -125,7 +126,7 @@ export default function Mapa() {
 
         Alert.alert(
             "Iniciar Rota",
-            "Deseja iniciar a viagem agora? O trajeto ficará visível para os passageiros.",
+            "Deseja iniciar a viagem agora?",
             [
                 { text: "Cancelar", style: "cancel" },
                 { 
@@ -167,7 +168,7 @@ export default function Mapa() {
                         if (response.ok) {
                             setViagemAtiva(false);
                             Alert.alert("Fim de linha", "Viagem encerrada com sucesso.");
-                            router.replace('/(tabs)/home');
+                            router.replace('/home-motorista');
                         }
                     } catch (error) {
                         Alert.alert("Erro", "Não foi possível encerrar a viagem.");
@@ -221,7 +222,6 @@ export default function Mapa() {
             <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
             <style>
                 body { padding: 0; margin: 0; }
-                /* O touch-action: none é o segredo para o Leaflet dominar os toques no mobile */
                 #map { height: 100vh; width: 100vw; touch-action: none; }
                 .van-icon { font-size: 24px; text-align: center; }
             </style>
@@ -278,9 +278,9 @@ export default function Mapa() {
                 function atualizarVan(pos) {
                     if (!vanMarker) {
                         vanMarker = L.marker(pos, {icon: L.divIcon({html: '🚐', className: 'van-icon', iconSize: [30,30]})}).addTo(map);
-                        map.setView(pos, 15); // Centraliza só na primeira vez
+                        map.setView(pos, 15);
                     } else {
-                        vanMarker.setLatLng(pos); // Só move o marcador depois
+                        vanMarker.setLatLng(pos);
                     }
                 }
 
@@ -321,7 +321,7 @@ export default function Mapa() {
                 style={styles.map} 
                 javaScriptEnabled={true}
                 bounces={false}
-                scrollEnabled={false} // TRAVA 1: Impede o React Native de roubar o gesto
+                scrollEnabled={false}
                 overScrollMode="never"
                 nestedScrollEnabled={true}
             />
@@ -346,35 +346,3 @@ export default function Mapa() {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f8fafc' },
-    map: { flex: 1 },
-    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
-    loadingText: { color: '#64748b', fontSize: 16, marginTop: 15, fontWeight: '600' },
-    headerOverlay: { position: 'absolute', left: 20, right: 20, zIndex: 10, flexDirection: 'row', alignItems: 'center', gap: 15 },
-    backButton: { width: 45, height: 45, backgroundColor: '#fff', borderRadius: 25, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
-    badgeSentido: { flex: 1, backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 25, alignItems: 'center' },
-    textoBadge: { color: '#fff', fontWeight: '800', fontSize: 14, letterSpacing: 1 },
-    footerAcoes: { position: 'absolute', left: 20, right: 20, zIndex: 10 },
-    btnIniciar: { flexDirection: 'row', backgroundColor: '#10b981', padding: 20, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#059669' },
-    btnEncerrar: { flexDirection: 'row', backgroundColor: '#ef4444', padding: 20, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#dc2626' },
-    btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
-    btnCentralizar: {
-        position: 'absolute',
-        bottom: 130,
-        right: 20,
-        backgroundColor: '#2563eb',
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 3,
-        elevation: 5,
-        zIndex: 20
-    }
-});

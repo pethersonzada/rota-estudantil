@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { TextInputMask } from 'react-native-masked-text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_URL } from '../config/config';
+import { cadastroStyles as styles } from '../constants/cadastroStyles';
 
 export default function Signup() {
     const { tipo } = useLocalSearchParams();
@@ -76,7 +77,7 @@ export default function Signup() {
                     contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 }]} 
                     showsVerticalScrollIndicator={false}
                 >
-                    <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                    <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
                         <Ionicons name="arrow-back" size={24} color="#1e293b" />
                     </TouchableOpacity>
 
@@ -87,11 +88,12 @@ export default function Signup() {
                         <View style={[styles.inputContainer, { borderColor: '#d97706', backgroundColor: '#fffbeb' }]}>
                             <Ionicons name="key-outline" size={20} color="#d97706" style={styles.inputIcon} />
                             <TextInput 
-                                style={styles.input} 
+                                style={styles.inputComIcone} 
                                 placeholder="Código de Autorização" 
                                 placeholderTextColor="#92400e"
                                 onChangeText={setCodigoAcesso}
                                 secureTextEntry
+                                underlineColorAndroid="transparent"
                             />
                         </View>
                     )}
@@ -99,12 +101,14 @@ export default function Signup() {
                     <View style={styles.inputContainer}>
                         <Ionicons name="person-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
                         <TextInput 
-                            style={styles.input} 
+                            style={styles.inputComIcone} 
                             placeholder="Nome Completo" 
                             placeholderTextColor="#94a3b8" 
                             onChangeText={setNome} 
                             autoComplete="name"
                             textContentType="name"
+                            autoCapitalize="words"
+                            underlineColorAndroid="transparent"
                         />
                     </View>
 
@@ -112,7 +116,7 @@ export default function Signup() {
                         <Ionicons name="card-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
                         <TextInputMask 
                             type={'cpf'} 
-                            style={styles.input} 
+                            style={styles.inputComIcone} 
                             placeholder="CPF" 
                             placeholderTextColor="#94a3b8" 
                             keyboardType="numeric" 
@@ -129,7 +133,7 @@ export default function Signup() {
                         <TextInputMask 
                             type={'cel-phone'} 
                             options={{ withDDD: true, dddMask: '(99) ' }} 
-                            style={styles.input} 
+                            style={styles.inputComIcone} 
                             placeholderTextColor="#94a3b8" 
                             placeholder="Telefone" 
                             keyboardType="numeric" 
@@ -144,7 +148,7 @@ export default function Signup() {
                     <View style={styles.inputContainer}>
                         <Ionicons name="lock-closed-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
                         <TextInput 
-                            style={styles.input} 
+                            style={styles.inputComIcone} 
                             placeholder="Senha" 
                             placeholderTextColor="#94a3b8" 
                             secureTextEntry={!showSenha} 
@@ -152,13 +156,14 @@ export default function Signup() {
                             autoComplete="new-password"
                             textContentType="newPassword"
                             importantForAutofill="yes"
+                            underlineColorAndroid="transparent"
                         />
                     </View>
 
                     <View style={styles.inputContainer}>
                         <Ionicons name="lock-closed-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
                         <TextInput 
-                            style={styles.input} 
+                            style={styles.inputComIcone} 
                             placeholder="Confirmar Senha" 
                             placeholderTextColor="#94a3b8" 
                             secureTextEntry={!showSenha} 
@@ -166,6 +171,7 @@ export default function Signup() {
                             autoComplete="new-password"
                             textContentType="newPassword"
                             importantForAutofill="no"
+                            underlineColorAndroid="transparent"
                         />
                         <TouchableOpacity onPress={() => setShowSenha(!showSenha)} style={styles.eyeIcon}>
                             <Ionicons name={showSenha ? "eye-off" : "eye"} size={20} color="#94a3b8" />
@@ -187,19 +193,3 @@ export default function Signup() {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f8fafc' },
-    content: { flexGrow: 1, padding: 30, justifyContent: 'center' },
-    backBtn: { width: 45, height: 45, backgroundColor: '#fff', borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0' },
-    titulo: { fontSize: 28, fontWeight: '800', color: '#1e293b', marginBottom: 10, textAlign: 'center' },
-    subtitulo: { fontSize: 16, color: '#64748b', marginBottom: 30, textAlign: 'center', lineHeight: 22 },
-    inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 15, marginBottom: 15, borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 15 },
-    inputIcon: { marginRight: 10 },
-    input: { flex: 1, paddingVertical: 18, fontSize: 16, color: '#1e293b' },
-    eyeIcon: { padding: 10 },
-    infoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#eff6ff', padding: 15, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#bfdbfe' },
-    infoText: { flex: 1, color: '#1e40af', fontSize: 13, marginLeft: 10, fontWeight: '500' },
-    btnPrimary: { backgroundColor: '#2563eb', padding: 20, borderRadius: 15, alignItems: 'center', marginTop: 10 },
-    btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', letterSpacing: 1 }
-});

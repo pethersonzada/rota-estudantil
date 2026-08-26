@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Modal, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_URL } from '../../config/config';
+import { perfilStyles as styles } from '../../constants/perfilStyles';
 
 export default function Perfil() {
     const [nome, setNome] = useState('');
@@ -95,7 +96,7 @@ export default function Perfil() {
                     <View style={styles.linha} />
                     <View style={styles.infoRow}>
                         <Text style={styles.label}>STATUS</Text>
-                        <Text style={[styles.valor, { color: '#2536eb' }]}>Online</Text>
+                        <Text style={[styles.valor, { color: '#2563eb' }]}>Online</Text>
                     </View>
                 </View>
 
@@ -135,7 +136,7 @@ export default function Perfil() {
                         </View>
                         <Text style={styles.modalTitulo}>Deletar conta</Text>
                         <Text style={styles.modalTexto}>
-                            Esta ação é irreversível. Todos os seus dados serão apagados. Para confirmar, digite o código <Text style={{fontWeight: 'bold'}}>ROTA2026</Text> abaixo:
+                            Esta ação é irreversível. Todos os seus dados serão apagados. Para confirmar, digite o código ROTA2026 abaixo:
                         </Text>
                         
                         <TextInput
@@ -178,69 +179,3 @@ export default function Perfil() {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f8fafc' },
-    scrollContent: { padding: 25 },
-    header: { alignItems: 'center', marginBottom: 40 },
-    avatar: { 
-        width: 100, height: 100, borderRadius: 50, backgroundColor: '#2563eb', 
-        justifyContent: 'center', alignItems: 'center', marginBottom: 15 
-    },
-    avatarText: { fontSize: 40, color: '#fff', fontWeight: 'bold' },
-    nome: { fontSize: 24, fontWeight: '800', color: '#1e293b' },
-    badge: { flexDirection: 'row', backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginTop: 10, alignItems: 'center' },
-    badgeText: { color: '#fff', fontSize: 12, fontWeight: '600', marginLeft: 4 },
-    card: { 
-        backgroundColor: '#fff', padding: 25, borderRadius: 20, marginBottom: 20, 
-        borderWidth: 1, borderColor: '#e2e8f0'
-    },
-    infoRow: { marginBottom: 10 },
-    label: { fontSize: 11, color: '#94a3b8', fontWeight: '800', letterSpacing: 0.8 },
-    valor: { fontSize: 18, color: '#1e293b', fontWeight: '600', marginTop: 4 },
-    linha: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 15 },
-    menuItem: { 
-        flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 20, 
-        borderRadius: 15, marginBottom: 15, borderWidth: 1, borderColor: '#e2e8f0'
-    },
-    menuText: { flex: 1, marginLeft: 15, fontSize: 16, fontWeight: '600', color: '#334155' },
-    botaoSair: { 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        backgroundColor: '#fee2e2', 
-        padding: 18, 
-        borderRadius: 15, 
-        marginTop: 20, 
-        borderWidth: 1, 
-        borderColor: '#fecaca',
-        gap: 8 
-    },
-    textoBotaoSair: { color: '#dc2626', fontSize: 16, fontWeight: 'bold' },
-    botaoDeletar: { 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        backgroundColor: '#ef4444', 
-        padding: 18, 
-        borderRadius: 15, 
-        marginTop: 15, 
-        borderWidth: 1, 
-        borderColor: '#dc2626',
-        gap: 8 
-    },
-    textoBotaoDeletar: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-    
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-    modalContent: { backgroundColor: '#fff', width: '100%', borderRadius: 20, padding: 25, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
-    iconeAlerta: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#fee2e2', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-    modalTitulo: { fontSize: 22, fontWeight: '900', color: '#1e293b', marginBottom: 10 },
-    modalTexto: { fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 20, lineHeight: 22 },
-    inputCodigo: { width: '100%', backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 15, fontSize: 16, textAlign: 'center', fontWeight: 'bold', color: '#1e293b', marginBottom: 25 },
-    modalBotoes: { flexDirection: 'row', gap: 15, width: '100%' },
-    botaoModal: { flex: 1, paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    botaoCancelar: { backgroundColor: '#f1f5f9' },
-    textoBotaoCancelar: { color: '#64748b', fontSize: 16, fontWeight: 'bold' },
-    botaoConfirmarExclusao: { backgroundColor: '#dc2626' },
-    textoBotaoConfirmarExclusao: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
-});
