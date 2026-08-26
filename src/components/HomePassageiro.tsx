@@ -8,11 +8,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { API_URL } from '../config/config';
 
-type Passageiro = {
+type Turma = {
     id: number;
     nome: string;
-    latitude: number;
-    longitude: number;
+    turno: string;
+    motorista?: {
+        nome: string;
+        telefone: string;
+    };
 };
 
 export default function HomePassageiro() {
@@ -28,6 +31,7 @@ export default function HomePassageiro() {
 
     const [statusViagem, setStatusViagem] = useState<'INATIVA' | 'ATIVA'>('INATIVA');
     const [statusGps, setStatusGps] = useState<'GARAGEM' | 'AGUARDANDO' | 'ONLINE' | 'ERRO'>('GARAGEM');
+    const [turma, setTurma] = useState<Turma | null>(null);
 
     useFocusEffect(
         useCallback(() => {
@@ -39,7 +43,9 @@ export default function HomePassageiro() {
         let errosConsecutivos = 0;
         const intervalo = setInterval(async () => {
             try {
-                const resStatus = await fetch(`${API_URL}/rota/status-atual`);
+                const resStatus = await fetch(`${API_URL}/rota/status-atual`, {
+                    headers: { 'Bypass-Tunnel-Reminder': 'true' }
+                });
                 if (!resStatus.ok) throw new Error('Falha no status');
                 const dataStatus = await resStatus.json();
                 
@@ -48,7 +54,10 @@ export default function HomePassageiro() {
                 if (dataStatus.status === 'ATIVA') {
                     const resLoc = await fetch(`${API_URL}/rota/localizacao-van`, {
                         method: 'GET',
-                        headers: { 'Accept': 'application/json' }
+                        headers: { 
+                            'Accept': 'application/json',
+                            'Bypass-Tunnel-Reminder': 'true'
+                        }
                     });
                     
                     if (resLoc.ok) {
@@ -108,44 +117,73 @@ export default function HomePassageiro() {
             
             setLoading(false);
 
-            const carregarStatusRemoto = async () => {
-                if (!id) return;
-                try {
-                    const res = await fetch(`${API_URL}/usuarios/passageiros`, { method: 'GET', headers: { 'Accept': 'application/json' } });
-                    if (res.ok) {
-                        const data = await res.json();
-                        const meuStatus = data.find((p: any) => p.id.toString() === id);
-                        setStatusConfirmado(meuStatus?.status || '');
-                    }
-                } catch (e) {
-                    console.log("Erro ao buscar status");
-                }
-            };
-
-            const carregarGpsHardware = async () => {
-                try {
-                    const { status } = await Location.requestForegroundPermissionsAsync();
-                    if (status === 'granted') {
-                        const cacheLoc = await Location.getLastKnownPositionAsync({});
-                        if (cacheLoc) {
-                            setMinhaLocalizacao({ latitude: cacheLoc.coords.latitude, longitude: cacheLoc.coords.longitude });
-                        }
-                        
-                        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-                        setMinhaLocalizacao({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-                    } else {
-                        setMinhaLocalizacao({ latitude: -8.2336, longitude: -35.7958 });
-                    }
-                } catch (e) {
-                    setMinhaLocalizacao({ latitude: -8.2336, longitude: -35.7958 });
-                }
-            };
-
-            Promise.all([carregarStatusRemoto(), carregarGpsHardware()]);
+            if (id) {
+                await Promise.all([
+                    carregarStatusRemoto(id),
+                    carregarGpsHardware(),
+                    carregarTurmaDoAluno(id)
+                ]);
+            }
 
         } catch (error) {
             console.error("Erro na carga inicial:", error);
             setLoading(false);
+        }
+    }
+
+    async function carregarStatusRemoto(id: string) {
+        try {
+            const res = await fetch(`${API_URL}/usuarios/passageiros`, { 
+                method: 'GET', 
+                headers: { 
+                    'Accept': 'application/json',
+                    'Bypass-Tunnel-Reminder': 'true'
+                } 
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const meuStatus = data.find((p: any) => p.id.toString() === id);
+                setStatusConfirmado(meuStatus?.status || '');
+            }
+        } catch (e) {
+            console.log("Erro ao buscar status");
+        }
+    }
+
+    async function carregarTurmaDoAluno(userId: string) {
+        try {
+            // URL ATUALIZADA CORRETAMENTE PARA /turmas/usuario/{userId}
+            const res = await fetch(`${API_URL}/turmas/usuario/${userId}`, {
+                headers: { 'Bypass-Tunnel-Reminder': 'true' }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setTurma(data);
+            } else {
+                setTurma(null);
+            }
+        } catch (e) {
+            console.log("Aluno sem turma vinculada");
+            setTurma(null);
+        }
+    }
+
+    async function carregarGpsHardware() {
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status === 'granted') {
+                const cacheLoc = await Location.getLastKnownPositionAsync({});
+                if (cacheLoc) {
+                    setMinhaLocalizacao({ latitude: cacheLoc.coords.latitude, longitude: cacheLoc.coords.longitude });
+                }
+                
+                const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                setMinhaLocalizacao({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+            } else {
+                setMinhaLocalizacao({ latitude: -8.2336, longitude: -35.7958 });
+            }
+        } catch (e) {
+            setMinhaLocalizacao({ latitude: -8.2336, longitude: -35.7958 });
         }
     }
 
@@ -158,7 +196,10 @@ export default function HomePassageiro() {
         try {
             const response = await fetch(`${API_URL}/rota/confirmar?usuarioId=${id}&status=${status}`, { 
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Bypass-Tunnel-Reminder': 'true'
+                }
             });
             
             if (!response.ok) {
@@ -296,56 +337,82 @@ export default function HomePassageiro() {
                     </TouchableOpacity>
                 )}
 
-                <View style={styles.topoPassageiro}>
-                    <Text style={styles.sectionTitleLeft}>Radar do Motorista</Text>
-                    {renderBadgeStatus()}
-                </View>
-
-                <View style={styles.radarCard}>
-                    {statusViagem === 'INATIVA' ? (
-                        <View style={styles.cadeadoBox}>
-                            <Ionicons name="bus-outline" size={50} color="#94a3b8" />
-                            <Text style={styles.cadeadoTitulo}>A van está na garagem</Text>
-                            <Text style={styles.cadeadoSubtitulo}>
-                                O motorista ainda não iniciou a rota de hoje. O radar aparecerá aqui quando a viagem começar.
-                            </Text>
+                {/* Card da Turma/Van do Aluno */}
+                <View style={styles.cardTurma}>
+                    <View style={styles.cardHeaderRow}>
+                        <Ionicons name="bus" size={20} color="#2563eb" />
+                        <Text style={styles.cardTitle}>Sua Van / Rota</Text>
+                    </View>
+                    {turma ? (
+                        <View style={{ marginTop: 8 }}>
+                            <Text style={styles.turmaNome}>{turma.nome} ({turma.turno})</Text>
+                            {turma.motorista && (
+                                <Text style={styles.motoristaText}>Motorista: {turma.motorista.nome}</Text>
+                            )}
                         </View>
-                    ) : minhaLocalizacao ? (
-                        <WebView 
-                            ref={vanMapRef} 
-                            source={{ html: mapHtml }} 
-                            javaScriptEnabled={true} 
-                            scrollEnabled={false} 
-                            nestedScrollEnabled={true}
-                            overScrollMode="never"
-                        />
                     ) : (
-                        <ActivityIndicator size="large" color="#2563eb" style={{ flex: 1 }} />
+                        <View style={styles.semTurmaBox}>
+                            <Ionicons name="time-outline" size={32} color="#f59e0b" />
+                            <Text style={styles.semTurmaTitulo}>Aguardando vinculação</Text>
+                            <Text style={styles.semTurmaSub}>O motorista ainda não te adicionou a nenhuma turma/rota.</Text>
+                        </View>
                     )}
                 </View>
 
-                <View style={styles.infoCard}>
-                    <Ionicons name="information-circle-outline" size={24} color="#2563eb" />
-                    <Text style={styles.infoCardText}>Informe ao seu motorista se você vai utilizar o transporte hoje.</Text>
-                </View>
+                {turma && (
+                    <>
+                        <View style={styles.topoPassageiro}>
+                            <Text style={styles.sectionTitleLeft}>Radar do Motorista</Text>
+                            {renderBadgeStatus()}
+                        </View>
 
-                {statusConfirmado ? (
-                    <View style={styles.cardConfirmado}>
-                        <Ionicons name="checkmark-circle" size={48} color="#2563eb" />
-                        <Text style={styles.confirmTitle}>Confirmado!</Text>
-                        <Text style={styles.confirmStatus}>Sua opção: {statusConfirmado}</Text>
-                        <TouchableOpacity onPress={() => registrarPresenca('LIMPAR')} style={styles.btnAlterar}>
-                            <Text style={styles.btnAlterarText}>Alterar minha decisão</Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : (
-                    <View style={styles.grid}>
-                        {['IDA', 'VOLTA', 'AMBOS', 'NAO_VOU'].map((s) => (
-                            <TouchableOpacity key={s} style={styles.btnPassageiro} onPress={() => registrarPresenca(s)}>
-                                <Text style={styles.btnText}>{s.replace('_', ' ')}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                        <View style={styles.radarCard}>
+                            {statusViagem === 'INATIVA' ? (
+                                <View style={styles.cadeadoBox}>
+                                    <Ionicons name="bus-outline" size={50} color="#94a3b8" />
+                                    <Text style={styles.cadeadoTitulo}>A van está na garagem</Text>
+                                    <Text style={styles.cadeadoSubtitulo}>
+                                        O motorista ainda não iniciou a rota de hoje. O radar aparecerá aqui quando a viagem começar.
+                                    </Text>
+                                </View>
+                            ) : minhaLocalizacao ? (
+                                <WebView 
+                                    ref={vanMapRef} 
+                                    source={{ html: mapHtml }} 
+                                    javaScriptEnabled={true} 
+                                    scrollEnabled={false} 
+                                    nestedScrollEnabled={true}
+                                    overScrollMode="never"
+                                />
+                            ) : (
+                                <ActivityIndicator size="large" color="#2563eb" style={{ flex: 1 }} />
+                            )}
+                        </View>
+
+                        <View style={styles.infoCard}>
+                            <Ionicons name="information-circle-outline" size={24} color="#2563eb" />
+                            <Text style={styles.infoCardText}>Informe ao seu motorista se você vai utilizar o transporte hoje.</Text>
+                        </View>
+
+                        {statusConfirmado ? (
+                            <View style={styles.cardConfirmado}>
+                                <Ionicons name="checkmark-circle" size={48} color="#2563eb" />
+                                <Text style={styles.confirmTitle}>Confirmado!</Text>
+                                <Text style={styles.confirmStatus}>Sua opção: {statusConfirmado}</Text>
+                                <TouchableOpacity onPress={() => registrarPresenca('LIMPAR')} style={styles.btnAlterar}>
+                                    <Text style={styles.btnAlterarText}>Alterar minha decisão</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <View style={styles.grid}>
+                                {['IDA', 'VOLTA', 'AMBOS', 'NAO_VOU'].map((s) => (
+                                    <TouchableOpacity key={s} style={styles.btnPassageiro} onPress={() => registrarPresenca(s)}>
+                                        <Text style={styles.btnText}>{s.replace('_', ' ')}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        )}
+                    </>
                 )}
             </ScrollView>
         </View>
@@ -362,6 +429,16 @@ const styles = StyleSheet.create({
     alertaTitulo: { fontWeight: 'bold', color: '#991b1b' },
     alertaTexto: { fontSize: 12, color: '#b91c1c' },
     
+    cardTurma: { backgroundColor: '#fff', padding: 15, borderRadius: 15, marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0' },
+    cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    cardTitle: { fontSize: 14, fontWeight: 'bold', color: '#334155' },
+    turmaNome: { fontSize: 16, fontWeight: 'bold', color: '#2563eb', marginTop: 2 },
+    motoristaText: { fontSize: 12, color: '#64748b', marginTop: 2 },
+    
+    semTurmaBox: { alignItems: 'center', paddingVertical: 15 },
+    semTurmaTitulo: { fontSize: 15, fontWeight: 'bold', color: '#334155', marginTop: 6 },
+    semTurmaSub: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 4 },
+
     topoPassageiro: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
     sectionTitleLeft: { fontSize: 16, fontWeight: 'bold', color: '#334155' },
     

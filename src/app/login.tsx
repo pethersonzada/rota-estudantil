@@ -23,7 +23,7 @@ export default function Login() {
         try {
             const cpfLimpo = cpf.replace(/\D/g, '');
 
-            const response = await fetch(`${API_URL}/auth/login`, {
+            const response = await fetch(`${API_URL}/usuarios/login`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -34,11 +34,15 @@ export default function Login() {
 
             if (response.ok) {
                 const data = await response.json();
-                await AsyncStorage.setItem('userId', String(data.id));
-                await AsyncStorage.setItem('userName', data.nome);
-                await AsyncStorage.setItem('userTipo', data.tipo);
-                await AsyncStorage.setItem('userEndereco', data.endereco || '');
                 
+                await AsyncStorage.multiSet([
+                    ['userId', String(data.id)],
+                    ['userName', data.nome || 'Usuário'],
+                    ['userTipo', data.tipo || ''],
+                    ['userEndereco', data.enderecoCompleto || '']
+                ]);
+
+                console.log("Login efetuado com sucesso. ID do usuário:", data.id);
                 router.replace('/(tabs)/home');
             } else {
                 Alert.alert("Acesso Negado", "CPF ou senha incorretos.");

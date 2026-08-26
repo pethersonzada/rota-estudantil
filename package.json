@@ -13,25 +13,25 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "8.6.0",
     "@react-native-picker/picker": "2.11.4",
-    "@react-navigation/native": "^7.2.3",
+    "@react-navigation/native": "^7.1.28",
     "@react-navigation/stack": "^7.8.12",
-    "expo": "^55.0.26",
-    "expo-constants": "~55.0.7",
+    "expo": "~55.0.30",
+    "expo-constants": "~55.0.17",
     "expo-font": "~55.0.6",
-    "expo-image-picker": "~55.0.20",
-    "expo-linking": "~55.0.7",
-    "expo-local-authentication": "~55.0.14",
-    "expo-location": "~55.1.10",
-    "expo-router": "~55.0.4",
-    "expo-secure-store": "~55.0.14",
-    "expo-splash-screen": "~55.0.10",
-    "expo-status-bar": "~55.0.4",
-    "expo-symbols": "~55.0.5",
-    "expo-web-browser": "~55.0.9",
+    "expo-image-picker": "~55.0.24",
+    "expo-linking": "~55.0.17",
+    "expo-local-authentication": "~55.0.18",
+    "expo-location": "~55.1.14",
+    "expo-router": "~55.0.18",
+    "expo-secure-store": "~55.0.18",
+    "expo-splash-screen": "~55.0.25",
+    "expo-status-bar": "~55.0.6",
+    "expo-symbols": "~55.0.9",
+    "expo-web-browser": "~55.0.20",
     "lucide-react-native": "^1.16.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "react-native": "0.83.2",
+    "react-native": "0.83.10",
     "react-native-maps": "1.27.2",
     "react-native-masked-text": "^1.13.0",
     "react-native-reanimated": "4.2.1",
@@ -41,11 +41,15 @@
     "react-native-svg": "15.15.3",
     "react-native-web": "~0.21.0",
     "react-native-webview": "13.16.0",
-    "react-native-worklets": "0.7.2"
+    "react-native-worklets": "0.7.4"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "date-and-time": "^0.14.2",
+    "uuid": "^11.1.1"
+  }
 }
