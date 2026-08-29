@@ -1,19 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BotoesAcaoMotorista } from '../components/BotoesAcaoMotorista';
 import { CardsTurmasMotorista } from '../components/CardsTurmasMotorista';
 import { API_URL } from '../config/config';
 import { homeMotoristaStyles as styles } from '../constants/homeMotoristaStyles';
+import { useAuth } from './context/AuthContext';
 
 export default function HomeMotorista() {
+    const { user } = useAuth();
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    
     const [loading, setLoading] = useState(true);
-    const [nome, setNome] = useState('');
+    const primeiraCarga = useRef(true);
+
     const [turmas, setTurmas] = useState<any[]>([]);
     const [turmaSelecionada, setTurmaSelecionada] = useState<any | null>(null);
     const [passageiros, setPassageiros] = useState<any[]>([]);
@@ -27,17 +30,27 @@ export default function HomeMotorista() {
     const [novoNomeTurma, setNovoNomeTurma] = useState('');
     const [novoTurnoTurma, setNovoTurnoTurma] = useState('');
 
-    useFocusEffect(useCallback(() => { carregarDadosIniciais(); }, []));
+    useFocusEffect(
+        useCallback(() => { 
+            carregarDadosSilencioso(); 
+        }, [user.id, turmaSelecionada?.id])
+    );
 
-    async function carregarDadosIniciais() {
-        setLoading(true);
-        const userName = await AsyncStorage.getItem('userName') || 'Motorista';
-        const motoristaId = await AsyncStorage.getItem('userId');
-        setNome(userName.split(' ')[0]);
+    async function carregarDadosSilencioso() {
 
-        if (motoristaId) await buscarTurmas(motoristaId);
-        await checarAmnesia();
+        if (primeiraCarga.current) {
+            setLoading(true);
+        }
+
+        if (user.id) {
+            await Promise.all([
+                buscarTurmas(user.id),
+                checarAmnesia()
+            ]);
+        }
+        
         setLoading(false);
+        primeiraCarga.current = false;
     }
 
     async function buscarTurmas(motoristaId: string) {
@@ -46,25 +59,45 @@ export default function HomeMotorista() {
             if (!res.ok) throw new Error();
             const data = await res.json();
             setTurmas(data);
+            
             if (data.length > 0) {
-                const atual = turmaSelecionada ? data.find((t: any) => t.id === turmaSelecionada.id) || data[0] : data[0];
-                setTurmaSelecionada(atual);
+
+                const atual = turmaSelecionada ? (data.find((t: any) => t.id === turmaSelecionada.id) || data[0]) : data[0];
+                
+
+                if (!turmaSelecionada || turmaSelecionada.id !== atual.id) {
+                    setTurmaSelecionada(atual);
+                }
+                
                 await buscarPassageirosPorTurma(atual.id);
-            } else { setTurmaSelecionada(null); setPassageiros([]); }
-        } catch (e) { Alert.alert("Erro", "Falha ao carregar as turmas."); }
+            } else { 
+                setTurmaSelecionada(null); 
+                setPassageiros([]); 
+            }
+        } catch (e) { 
+            console.log("Falha ao carregar as turmas."); 
+        }
     }
 
     async function buscarPassageirosPorTurma(turmaId: number) {
         try {
             const res = await fetch(`${API_URL}/turmas/${turmaId}/passageiros`, { headers: { 'Accept': 'application/json', 'Bypass-Tunnel-Reminder': 'true' } });
-            if (res.ok) setPassageiros(await res.json());
-        } catch (e) { Alert.alert("Erro", "Falha ao buscar passageiros."); }
+            if (res.ok) {
+                const dados = await res.json();
+                setPassageiros(dados);
+            }
+        } catch (e) { 
+            console.log("Falha ao buscar passageiros."); 
+        }
     }
 
     async function checarAmnesia() {
         try {
             const res = await fetch(`${API_URL}/rota/status-atual`, { headers: { 'Bypass-Tunnel-Reminder': 'true' } });
-            if (res.ok) { const data = await res.json(); setViagemAtiva(data.status === 'ATIVA'); }
+            if (res.ok) { 
+                const data = await res.json(); 
+                setViagemAtiva(data.status === 'ATIVA'); 
+            }
         } catch (e) {}
     }
 
@@ -83,27 +116,50 @@ export default function HomeMotorista() {
     const totalRespostas = passageiros.filter(p => p.status).length;
     const todosResponderam = totalPassageiros > 0 && totalRespostas === totalPassageiros;
 
-    const iniciarRota = async (sentido: string) => {
+    const iniciarRota = (sentido: string) => {
         if (!turmaSelecionada) { Alert.alert("Atenção", "Selecione uma turma."); return; }
-        if (viagemAtiva) { router.push(`/mapa?sentido=${sentido.toLowerCase()}`); return; }
+        if (viagemAtiva) return;
 
-        try {
-            const res = await fetch(`${API_URL}/rota/iniciar`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
-                body: JSON.stringify({ turmaId: Number(turmaSelecionada.id), sentido: sentido })
-            });
-            if (!res.ok) { const err = await res.json(); throw new Error(err.erro); }
+        const executarInicioNoServidor = async () => {
+            try {
+                const res = await fetch(`${API_URL}/rota/iniciar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+                    body: JSON.stringify({ turmaId: Number(turmaSelecionada.id), sentido: sentido })
+                });
+                
+                if (!res.ok) { 
+                    const err = await res.json(); 
+                    throw new Error(err.erro); 
+                }
 
-            if (!todosResponderam) {
-                Alert.alert("Pendentes", "Existem alunos sem confirmar. Deseja acessar o mapa?", [
-                    { text: "Cancelar", style: "cancel" },
-                    { text: "Acessar", onPress: () => router.push(`/mapa?sentido=${sentido.toLowerCase()}`) }
-                ]);
-            } else {
+
                 router.push(`/mapa?sentido=${sentido.toLowerCase()}`);
+            } catch (e: any) { 
+                Alert.alert("Erro", e.message || "Erro ao iniciar a rota."); 
             }
-        } catch (e: any) { Alert.alert("Erro", e.message || "Erro ao iniciar."); }
+        };
+
+
+        if (!todosResponderam) {
+            Alert.alert(
+                "Alunos Pendentes", 
+                "Existem alunos sem confirmar presença. Deseja iniciar a rota de " + sentido + " mesmo assim?", 
+                [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Iniciar Trajeto", style: "default", onPress: executarInicioNoServidor }
+                ]
+            );
+        } else {
+            Alert.alert(
+                "Iniciar Rota", 
+                "Deseja iniciar a rota de " + sentido + " agora?", 
+                [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Iniciar", style: "default", onPress: executarInicioNoServidor }
+                ]
+            );
+        }
     };
 
     if (loading) return <ActivityIndicator size="large" color="#2563eb" style={{ flex: 1, backgroundColor: '#f1f5f9' }} />;
@@ -112,7 +168,7 @@ export default function HomeMotorista() {
         <View style={styles.container}>
             <View style={[styles.header, { paddingTop: insets.top + 15 }]}>
                 <Text style={styles.dateText}>{new Date().toLocaleDateString('pt-BR', { month: 'long', day: 'numeric' })}</Text>
-                <Text style={styles.welcome}>Olá, {nome}</Text>
+                <Text style={styles.welcome}>Olá, {user.nome.split(' ')[0]}</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

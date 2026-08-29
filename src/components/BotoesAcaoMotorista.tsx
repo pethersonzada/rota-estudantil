@@ -21,6 +21,7 @@ export function BotoesAcaoMotorista({ viagemAtiva, todosResponderam, onIniciarRo
                         { backgroundColor: viagemAtiva ? '#94a3b8' : (todosResponderam ? '#0ea5e9' : '#f59e0b') }
                     ]}
                     onPress={() => onIniciarRota('IDA')}
+                    disabled={viagemAtiva}
                 >
                     <Ionicons name={viagemAtiva ? "lock-closed" : "arrow-up"} size={20} color="#fff" />
                     <Text style={styles.btnText}>IDA</Text>
@@ -32,6 +33,7 @@ export function BotoesAcaoMotorista({ viagemAtiva, todosResponderam, onIniciarRo
                         { backgroundColor: viagemAtiva ? '#94a3b8' : (todosResponderam ? '#6366f1' : '#f59e0b') }
                     ]}
                     onPress={() => onIniciarRota('VOLTA')}
+                    disabled={viagemAtiva}
                 >
                     <Ionicons name={viagemAtiva ? "lock-closed" : "arrow-down"} size={20} color="#fff" />
                     <Text style={styles.btnText}>VOLTA</Text>

@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, Image, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
@@ -6,10 +5,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FormLogin } from '../components/FormLogin';
 import { API_URL } from '../config/config';
 import { loginStyles as styles } from '../constants/loginStyles';
+import { useAuth } from './context/AuthContext';
 
 export default function Login() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const { signIn } = useAuth(); 
     const [cpf, setCpf] = useState('');
     const [senha, setSenha] = useState('');
     const [loading, setLoading] = useState(false);
@@ -24,6 +25,8 @@ export default function Login() {
         try {
             const cpfLimpo = cpf.replace(/\D/g, '');
 
+            // await AsyncStorage.clear();
+
             const response = await fetch(`${API_URL}/usuarios/login`, {
                 method: 'POST',
                 headers: { 
@@ -35,19 +38,16 @@ export default function Login() {
 
             if (response.ok) {
                 const data = await response.json();
-                
-                await AsyncStorage.multiSet([
-                    ['userId', String(data.id)],
-                    ['userName', data.nome || 'Usuário'],
-                    ['userTipo', data.tipo || ''],
-                    ['userEndereco', data.enderecoCompleto || '']
-                ]);
 
-                if (data.tipo === 'MOTORISTA') {
-                    router.replace('/home-motorista');
-                } else {
-                    router.replace('/home-passageiro');
-                }
+                await signIn({
+                    id: String(data.id),
+                    nome: data.nome || 'Usuário',
+                    tipo: data.tipo || 'PASSAGEIRO',
+                    endereco: data.enderecoCompleto || 'Endereço Pendente'
+                });
+                
+                router.replace('/(tabs)/home');
+                
             } else {
                 Alert.alert("Acesso Negado", "CPF ou senha incorretos.");
             }
@@ -67,7 +67,7 @@ export default function Login() {
                 showsVerticalScrollIndicator={false}
             >
                 <View style={styles.logoBox}>
-                    <Image source={require('@/assets/images/logo-app-sem-title.jpeg')} style={{ width: 150, height: 150, borderRadius: 20}}/>
+                    <Image source={require('../../assets/images/logo-app-sem-title.jpeg')} style={{ width: 150, height: 150, borderRadius: 20}}/>
                 </View>
 
                 <Text style={styles.title}>Bem-vindo de Volta!</Text>

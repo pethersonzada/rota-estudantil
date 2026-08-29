@@ -1,29 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Modal, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_URL } from '../../config/config';
 import { perfilStyles as styles } from '../../constants/perfilStyles';
+import { useAuth } from '.././context/AuthContext';
 
 export default function Perfil() {
-    const [nome, setNome] = useState('');
-    const [tipo, setTipo] = useState('');
+    const { user, signOut } = useAuth();
     const router = useRouter();
     const insets = useSafeAreaInsets();
 
     const [modalDeletarVisivel, setModalDeletarVisivel] = useState(false);
     const [codigoDigitado, setCodigoDigitado] = useState('');
     const [carregandoExclusao, setCarregandoExclusao] = useState(false);
-
-    useEffect(() => {
-        const carregar = async () => {
-            setNome((await AsyncStorage.getItem('userName')) || 'Usuário');
-            setTipo((await AsyncStorage.getItem('userTipo')) || 'Não definido');
-        };
-        carregar();
-    }, []);
 
     const abrirWhatsApp = () => {
         const url = 'https://wa.me/5581991976404';
@@ -40,7 +31,7 @@ export default function Perfil() {
                     text: "Sair", 
                     style: "destructive", 
                     onPress: async () => {
-                        await AsyncStorage.clear(); 
+                        await signOut();
                         router.replace('/login');
                     }
                 }
@@ -56,14 +47,13 @@ export default function Perfil() {
 
         setCarregandoExclusao(true);
         try {
-            const userId = await AsyncStorage.getItem('userId');
-            if (userId) {
-                await fetch(`${API_URL}/usuarios/${userId}`, { method: 'DELETE' });
+            if (user.id) {
+                await fetch(`${API_URL}/usuarios/${user.id}`, { method: 'DELETE' });
             }
         } catch (error) {
             console.error(error);
         } finally {
-            await AsyncStorage.clear(); 
+            await signOut(); 
             setModalDeletarVisivel(false);
             router.replace('/login');
         }
@@ -79,9 +69,9 @@ export default function Perfil() {
             >
                 <View style={styles.header}>
                     <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>{nome.charAt(0).toUpperCase()}</Text>
+                        <Text style={styles.avatarText}>{user.nome ? user.nome.charAt(0).toUpperCase() : 'U'}</Text>
                     </View>
-                    <Text style={styles.nome}>{nome}</Text>
+                    <Text style={styles.nome}>{user.nome}</Text>
                     <View style={styles.badge}>
                         <Ionicons name="checkmark-circle" size={14} color="#fff" />
                         <Text style={styles.badgeText}> Conta Verificada</Text>
@@ -91,7 +81,7 @@ export default function Perfil() {
                 <View style={styles.card}>
                     <View style={styles.infoRow}>
                         <Text style={styles.label}>TIPO DE CONTA</Text>
-                        <Text style={styles.valor}>{tipo}</Text>
+                        <Text style={styles.valor}>{user.tipo}</Text>
                     </View>
                     <View style={styles.linha} />
                     <View style={styles.infoRow}>

@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -8,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { API_URL } from '../config/config';
 import { mapaStyles as styles } from '../constants/mapaStyles';
+import { useAuth } from './context/AuthContext';
 
 type Passageiro = {
     id: number;
@@ -21,34 +21,27 @@ export default function Mapa() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { sentido } = useLocalSearchParams<{ sentido: string }>(); 
+    const { user } = useAuth();
     
     const [direcaoAtual, setDirecaoAtual] = useState(sentido || 'ida'); 
     const [localizacao, setLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
     const [rota, setRota] = useState<Passageiro[]>([]);
     const [garagem, setGaragem] = useState<{ latitude: number; longitude: number } | null>(null);
     const [loading, setLoading] = useState(true);
-    
     const [viagemAtiva, setViagemAtiva] = useState(false);
-    const [motoristaId, setMotoristaId] = useState<string | null>(null);
 
     useEffect(() => {
         let locationSubscription: Location.LocationSubscription | null = null;
 
         const iniciarSistema = async () => {
             try {
-                const idSaved = await AsyncStorage.getItem('userId');
-                setMotoristaId(idSaved);
-
                 let direcaoDefinitiva = sentido || 'ida';
-                const resStatus = await fetch(`${API_URL}/rota/status-atual`);
+                const resStatus = await fetch(`${API_URL}/rota/status-atual`, { headers: { 'Bypass-Tunnel-Reminder': 'true' } });
                 if (resStatus.ok) {
                     const dataStatus = await resStatus.json();
                     if (dataStatus.status === 'ATIVA') {
                         setViagemAtiva(true);
-                        if (dataStatus.sentido) {
-                            direcaoDefinitiva = dataStatus.sentido.toLowerCase();
-                            setDirecaoAtual(direcaoDefinitiva);
-                        }
+                        if (dataStatus.sentido) direcaoDefinitiva = dataStatus.sentido.toLowerCase();
                     }
                 }
 
@@ -64,7 +57,7 @@ export default function Mapa() {
                             try {
                                 await fetch(`${API_URL}/rota/localizacao-van?latitude=${lat}&longitude=${lng}`, {
                                     method: 'POST',
-                                    headers: { 'Accept': 'application/json' }
+                                    headers: { 'Accept': 'application/json', 'Bypass-Tunnel-Reminder': 'true' }
                                 });
                             } catch (e) {}
                         }
@@ -81,17 +74,12 @@ export default function Mapa() {
 
         iniciarSistema();
 
-        return () => {
-            if (locationSubscription) locationSubscription.remove();
-        };
+        return () => { if (locationSubscription) locationSubscription.remove(); };
     }, []);
 
     useEffect(() => {
         if (localizacao && webViewRef.current) {
-            webViewRef.current.injectJavaScript(`
-                if (typeof atualizarVan === 'function') atualizarVan([${localizacao.latitude}, ${localizacao.longitude}]);
-                true;
-            `);
+            webViewRef.current.injectJavaScript(`if (typeof atualizarVan === 'function') atualizarVan([${localizacao.latitude}, ${localizacao.longitude}]); true;`);
         }
     }, [localizacao]);
 
@@ -99,119 +87,70 @@ export default function Mapa() {
         setLoading(true);
         try {
             const resMotorista = await fetch(`${API_URL}/usuarios/motorista`, { headers: { 'bypass-tunnel-reminder': 'true' } });
-            if (!resMotorista.ok) throw new Error("Motorista não encontrado");
+            if (!resMotorista.ok) throw new Error();
             const dadosMotorista = await resMotorista.json();
-            setGaragem({ latitude: dadosMotorista.latitude, longitude: dadosMotorista.longitude });
+            setGaragem({ latitude: Number(dadosMotorista.latitude), longitude: Number(dadosMotorista.longitude) });
 
-            const resRota = await fetch(`${API_URL}/rota/otimizar?sentido=${direcaoUsada}`, { 
-                headers: { 'bypass-tunnel-reminder': 'true' } 
-            });
-            
+            const resRota = await fetch(`${API_URL}/rota/otimizar?sentido=${direcaoUsada}`, { headers: { 'bypass-tunnel-reminder': 'true' } });
             if (resRota.ok) {
-                const dadosRota = await resRota.json();
-                setRota(dadosRota);
-            } else {
-                const erroData = await resRota.json();
-                Alert.alert("Atenção", erroData.erro || "Sem passageiros hoje.");
+                setRota(await resRota.json());
+                setDirecaoAtual(direcaoUsada);
             }
         } catch (error) {
-            console.error("Erro na carga:", error);
+            console.error("Erro na carga");
         } finally {
             setLoading(false);
         }
     }
 
     async function handleIniciarViagem() {
-        if (!motoristaId) return;
-
-        Alert.alert(
-            "Iniciar Rota",
-            "Deseja iniciar a viagem agora?",
-            [
-                { text: "Cancelar", style: "cancel" },
-                { 
-                    text: "Iniciar", 
-                    style: "default", 
-                    onPress: async () => {
-                        try {
-                            const response = await fetch(`${API_URL}/rota/iniciar`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ motoristaId: motoristaId, sentido: direcaoAtual.toUpperCase() }) 
-                            });
-                            
-                            if (response.ok) {
-                                setViagemAtiva(true);
-                                Alert.alert("Pé na estrada", "Viagem iniciada com sucesso.");
-                            } else {
-                                const data = await response.json();
-                                Alert.alert("Atenção", data.erro || "Falha ao iniciar rota.");
-                            }
-                        } catch (error) {
-                            Alert.alert("Erro", "Falha de conexão com o servidor.");
-                        }
-                    } 
-                }
-            ]
-        );
+        if (!user.id) return;
+        Alert.alert("Iniciar Rota", "Deseja iniciar a viagem agora?", [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Iniciar", onPress: async () => {
+                try {
+                    const res = await fetch(`${API_URL}/rota/iniciar`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+                        body: JSON.stringify({ motoristaId: user.id, sentido: direcaoAtual.toUpperCase() }) 
+                    });
+                    if (res.ok) setViagemAtiva(true);
+                } catch (error) {}
+            }}
+        ]);
     }
 
     async function handleEncerrarViagem() {
-        Alert.alert(
-            "Finalizar Trajeto",
-            "Todos os alunos já desembarcaram?",
-            [
-                { text: "Cancelar", style: "cancel" },
-                { text: "Encerrar Viagem", style: 'destructive', onPress: async () => {
-                    try {
-                        const response = await fetch(`${API_URL}/rota/encerrar`, { method: 'POST' });
-                        if (response.ok) {
-                            setViagemAtiva(false);
-                            Alert.alert("Fim de linha", "Viagem encerrada com sucesso.");
-                            router.replace('/home-motorista');
-                        }
-                    } catch (error) {
-                        Alert.alert("Erro", "Não foi possível encerrar a viagem.");
+        Alert.alert("Finalizar Trajeto", "Encerrar viagem?", [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Encerrar", style: 'destructive', onPress: async () => {
+                try {
+                    const res = await fetch(`${API_URL}/rota/encerrar`, { method: 'POST', headers: { 'Bypass-Tunnel-Reminder': 'true' } });
+                    if (res.ok) {
+                        setViagemAtiva(false);
+                        router.replace('/(tabs)/home');
                     }
-                }}
-            ]
-        );
+                } catch (error) {}
+            }}
+        ]);
     }
 
     function handleVoltar() {
         if (viagemAtiva) {
-            Alert.alert(
-                "Atenção",
-                "A viagem está em andamento. Deseja sair do mapa?",
-                [
-                    { text: "Cancelar", style: "cancel" },
-                    { text: "Sair", style: 'destructive', onPress: () => router.back() }
-                ]
-            );
-        } else {
-            router.back();
-        }
+            Alert.alert("Atenção", "Sair da viagem?", [
+                { text: "Cancelar", style: "cancel" },
+                { text: "Sair", style: 'destructive', onPress: () => router.replace('/(tabs)/home') }
+            ]);
+        } else { router.replace('/(tabs)/home'); }
     }
 
     function centralizarNaVan() {
         if (webViewRef.current) {
-            webViewRef.current.injectJavaScript(`
-                if (typeof vanMarker !== 'undefined' && vanMarker) {
-                    map.setView(vanMarker.getLatLng(), 15);
-                }
-                true;
-            `);
+            webViewRef.current.injectJavaScript(`if (typeof vanMarker !== 'undefined' && vanMarker) { map.setView(vanMarker.getLatLng(), 15); } true;`);
         }
     }
 
-    if (loading || !garagem) {
-        return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#2563eb" />
-                <Text style={styles.loadingText}>Sincronizando com o servidor...</Text>
-            </View>
-        );
-    }
+    if (loading || !garagem) return <ActivityIndicator size="large" color="#2563eb" style={{flex:1}} />;
 
     const htmlDoMapa = `
         <!DOCTYPE html>
@@ -220,11 +159,7 @@ export default function Mapa() {
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
             <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
             <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-            <style>
-                body { padding: 0; margin: 0; }
-                #map { height: 100vh; width: 100vw; touch-action: none; }
-                .van-icon { font-size: 24px; text-align: center; }
-            </style>
+            <style>body{padding:0;margin:0}#map{height:100vh;width:100vw;touch-action:none}.van-icon{font-size:24px;text-align:center}</style>
         </head>
         <body>
             <div id="map"></div>
@@ -239,15 +174,14 @@ export default function Mapa() {
                 var startLat = ${localizacao?.latitude ?? garagem.latitude};
                 var startLng = ${localizacao?.longitude ?? garagem.longitude};
                 
-                var map = L.map('map', { zoomControl: false, dragging: true, tap: true }).setView([startLat, startLng], 14);
+                var map = L.map('map', { zoomControl: false }).setView([startLat, startLng], 14);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
                 
-                var polyline = L.polyline([], {color: '#2563eb', weight: 8, opacity: 0.7, lineJoin: 'round'}).addTo(map);
+                var polyline = L.polyline([], {color: '#2563eb', weight: 6, opacity: 0.8, lineJoin: 'round'}).addTo(map);
                 
                 var passageiros = ${JSON.stringify(rota)};
                 var casaMotorista = [${garagem.latitude}, ${garagem.longitude}]; 
                 var uniCaruaru = [-8.302755, -35.991248]; 
-
                 var sentidoAtual = "${direcaoAtual}"; 
 
                 L.marker(casaMotorista).addTo(map).bindPopup("<b>🏠 Garagem</b>");
@@ -255,7 +189,7 @@ export default function Mapa() {
                     icon: new L.Icon({iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [25, 41]})
                 }).addTo(map).bindPopup("<b>🏁 UNINASSAU</b>");
 
-                passageiros.forEach((p, i) => {
+                passageiros.forEach((p) => {
                     L.marker([p.latitude, p.longitude]).addTo(map).bindPopup("<b>" + p.nome + "</b>");
                 });
 
@@ -274,7 +208,6 @@ export default function Mapa() {
                 }
 
                 var vanMarker = null;
-
                 function atualizarVan(pos) {
                     if (!vanMarker) {
                         vanMarker = L.marker(pos, {icon: L.divIcon({html: '🚐', className: 'van-icon', iconSize: [30,30]})}).addTo(map);
@@ -284,12 +217,9 @@ export default function Mapa() {
                     }
                 }
 
-                if (${localizacao !== null ? 'true' : 'false'}) {
-                    atualizarVan([startLat, startLng]);
-                }
+                if (${localizacao !== null ? 'true' : 'false'}) atualizarVan([startLat, startLng]);
                 
                 var initialWaypoints = construirWaypoints();
-                
                 fetch('https://router.project-osrm.org/route/v1/driving/' + initialWaypoints + '?geometries=geojson&overview=full')
                     .then(r => r.json())
                     .then(data => {
@@ -297,7 +227,7 @@ export default function Mapa() {
                             var fullCoords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
                             polyline.setLatLngs(fullCoords);
                         }
-                    }).catch(e => console.log("Erro no OSRM", e));
+                    }).catch(e => console.log(e));
             </script>
         </body>
         </html>
@@ -314,17 +244,7 @@ export default function Mapa() {
                 </View>
             </View>
             
-            <WebView 
-                ref={webViewRef}
-                originWhitelist={['*']} 
-                source={{ html: htmlDoMapa }} 
-                style={styles.map} 
-                javaScriptEnabled={true}
-                bounces={false}
-                scrollEnabled={false}
-                overScrollMode="never"
-                nestedScrollEnabled={true}
-            />
+            <WebView ref={webViewRef} originWhitelist={['*']} source={{ html: htmlDoMapa }} style={styles.map} javaScriptEnabled={true} bounces={false} scrollEnabled={false} overScrollMode="never" />
 
             <TouchableOpacity style={styles.btnCentralizar} onPress={centralizarNaVan}>
                 <Ionicons name="locate" size={24} color="#fff" />

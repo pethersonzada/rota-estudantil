@@ -1,28 +1,10 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-
+import React from 'react';
 import HomeMotorista from '../home-motorista';
 import HomePassageiro from '../home-passageiro';
+import { useAuth } from './../context/AuthContext';
 
 export default function HomeTab() {
-    const [tipo, setTipo] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
 
-    useEffect(() => {
-        AsyncStorage.getItem('userTipo').then(res => {
-            setTipo(res || 'PASSAGEIRO');
-            setLoading(false);
-        });
-    }, []);
-
-    if (loading) {
-        return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-                <ActivityIndicator size="large" color="#2563eb" />
-            </View>
-        );
-    }
-
-    return tipo === 'MOTORISTA' ? <HomeMotorista /> : <HomePassageiro />;
+    return user.tipo === 'MOTORISTA' ? <HomeMotorista /> : <HomePassageiro />;
 }

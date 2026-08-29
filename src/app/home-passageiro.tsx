@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -10,14 +9,17 @@ import { CardTurmaPassageiro } from '../components/CardTurmaPassageiro';
 import { SeletorPresenca } from '../components/SeletorPresenca';
 import { API_URL } from '../config/config';
 import { homePassageiroStyles as styles } from '../constants/homePassageiroStyles';
+import { useAuth } from './context/AuthContext';
 
 export default function HomePassageiro() {
+    const { user } = useAuth();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const vanMapRef = useRef<WebView>(null);
     
     const [loading, setLoading] = useState(true);
-    const [nome, setNome] = useState('');
+    const primeiraCarga = useRef(true);
+    
     const [temEndereco, setTemEndereco] = useState(true);
     const [statusConfirmado, setStatusConfirmado] = useState('');
     const [minhaLocalizacao, setMinhaLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -25,7 +27,21 @@ export default function HomePassageiro() {
     const [statusGps, setStatusGps] = useState('GARAGEM');
     const [turma, setTurma] = useState(null);
 
-    useFocusEffect(useCallback(() => { carregarDados(); }, []));
+    // Dispara o carregamento assim que o ID do usuário chega pelo AuthContext
+    useEffect(() => {
+        if (user?.id) {
+            carregarDados();
+        }
+    }, [user?.id]);
+
+    // Recarrega os dados sempre que a tela ganha foco
+    useFocusEffect(
+        useCallback(() => { 
+            if (user?.id) {
+                carregarDados();
+            }
+        }, [user?.id])
+    );
 
     useEffect(() => {
         const intervalo = setInterval(async () => {
@@ -51,25 +67,23 @@ export default function HomePassageiro() {
     }, []);
 
     async function carregarDados() {
-        try {
-            const [userName, end, id] = await Promise.all([
-                AsyncStorage.getItem('userName'),
-                AsyncStorage.getItem('userEndereco'),
-                AsyncStorage.getItem('userId')
-            ]);
-            setNome((userName || 'Usuário').split(' ')[0]);
-            setTemEndereco(end ? end !== 'Endereço Pendente' : false);
-            setLoading(false);
+        if (primeiraCarga.current) setLoading(true);
 
-            if (id) {
+        try {
+            setTemEndereco(!!user?.endereco && user.endereco !== 'Endereço Pendente');
+
+            if (user?.id) {
                 const [resStatus, resTurma] = await Promise.all([
                     fetch(`${API_URL}/usuarios/passageiros`, { headers: { 'Bypass-Tunnel-Reminder': 'true' } }),
-                    fetch(`${API_URL}/turmas/usuario/${id}`, { headers: { 'Bypass-Tunnel-Reminder': 'true' } })
+                    fetch(`${API_URL}/turmas/usuario/${user.id}`, { headers: { 'Bypass-Tunnel-Reminder': 'true' } })
                 ]);
+                
                 if (resStatus.ok) {
                     const list = await resStatus.json();
-                    setStatusConfirmado(list.find((p: any) => p.id.toString() === id)?.status || '');
+                    const meuRegistro = list.find((p: any) => String(p.id || p.usuarioId || p.passageiroId) === String(user.id));
+                    setStatusConfirmado(meuRegistro?.status || meuRegistro?.presenca || '');
                 }
+                
                 if (resTurma.ok) setTurma(await resTurma.json());
 
                 const { status } = await Location.requestForegroundPermissionsAsync();
@@ -78,37 +92,36 @@ export default function HomePassageiro() {
                     setMinhaLocalizacao({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
                 }
             }
-        } catch (e) { setLoading(false); }
+        } catch (e) { 
+        } finally {
+            setLoading(false);
+            primeiraCarga.current = false;
+        }
     }
 
     async function registrarPresenca(status: string) {
-        const id = await AsyncStorage.getItem('userId');
-        if (!id) return;
-        
+        if (!user?.id) return;
         const statusEnvio = status === 'LIMPAR' ? '' : status;
         setStatusConfirmado(statusEnvio);
-
         try {
-            await fetch(`${API_URL}/presenca/marcar`, { 
+            const resposta = await fetch(`${API_URL}/presenca/marcar`, { 
                 method: 'POST', 
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'Bypass-Tunnel-Reminder': 'true' 
-                },
-                body: JSON.stringify({ 
-                    usuarioId: Number(id), 
-                    status: statusEnvio 
-                })
+                headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+                body: JSON.stringify({ usuarioId: Number(user.id), status: statusEnvio })
             });
+            
+            if (!resposta.ok) {
+                carregarDados();
+            }
         } catch (e) { 
-            carregarDados(); 
+            carregarDados();
             Alert.alert("Erro", "Falha de conexão."); 
         }
     }
 
     const mapHtml = useMemo(() => {
         if (!minhaLocalizacao) return '';
-        return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1.0"/><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><style>body,html{height:100%;margin:0}#map{height:100vh;width:100vw;position:absolute}</style></head><body><div id="map"></div><script>var map=L.map('map',{zoomControl:false}).setView([${minhaLocalizacao.latitude},${minhaLocalizacao.longitude}],15);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);var vMarker=null;function updateDriverLocation(lat,lng){if(!vMarker){vMarker=L.marker([lat,lng]).addTo(map);}else{vMarker.setLatLng([lat,lng]);map.panTo([lat,lng]);}}</script></body></html>`;
+        return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><style>body,html{height:100%;margin:0;padding:0}#map{height:100vh;width:100vw;position:absolute}.van-icon{font-size:24px;text-align:center}</style></head><body><div id="map"></div><script>var map=L.map('map',{zoomControl:false,dragging:true}).setView([${minhaLocalizacao.latitude},${minhaLocalizacao.longitude}],15);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);var vMarker=null;function updateDriverLocation(lat,lng){if(!vMarker){vMarker=L.marker([lat,lng],{icon:L.divIcon({html:'🚐',className:'van-icon',iconSize:[30,30]})}).addTo(map);}else{vMarker.setLatLng([lat,lng]);map.panTo([lat,lng]);}}</script></body></html>`;
     }, [minhaLocalizacao]);
 
     if (loading) return <ActivityIndicator size="large" color="#2563eb" style={{ flex: 1, backgroundColor: '#f1f5f9' }} />;
@@ -117,7 +130,7 @@ export default function HomePassageiro() {
         <View style={styles.container}>
             <View style={[styles.header, { paddingTop: insets.top + 15 }]}>
                 <Text style={styles.dateText}>{new Date().toLocaleDateString('pt-BR', { month: 'long', day: 'numeric' })}</Text>
-                <Text style={styles.welcome}>Olá, {nome}</Text>
+                <Text style={styles.welcome}>Olá, {user?.nome ? user.nome.split(' ')[0] : ''}</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -125,7 +138,7 @@ export default function HomePassageiro() {
                     <TouchableOpacity style={styles.bannerAlerta} onPress={() => router.push('/cadastro-endereco')}>
                         <Ionicons name="location" size={24} color="#b91c1c" />
                         <View style={{flex: 1, marginLeft: 10}}>
-                            <Text style={styles.alertaTitulo}>Local de embarque faltando</Text>
+                            <Text style={styles.alertaTitulo}>Local faltando</Text>
                             <Text style={styles.alertaTexto}>Defina seu endereço no Perfil.</Text>
                         </View>
                     </TouchableOpacity>
@@ -136,7 +149,7 @@ export default function HomePassageiro() {
                 {turma && (
                     <>
                         <View style={styles.topoPassageiro}>
-                            <Text style={styles.sectionTitle}>Radar do Motorista</Text>
+                            <Text style={styles.sectionTitle}>Radar da Van</Text>
                             <View style={styles.badge}><Text style={styles.badgeTexto}>{statusGps}</Text></View>
                         </View>
 
@@ -147,7 +160,7 @@ export default function HomePassageiro() {
                                     <Text style={styles.cadeadoTitulo}>A van está na garagem</Text>
                                 </View>
                             ) : minhaLocalizacao ? (
-                                <WebView ref={vanMapRef} source={{ html: mapHtml }} javaScriptEnabled={true} scrollEnabled={false} />
+                                <WebView ref={vanMapRef} source={{ html: mapHtml }} javaScriptEnabled={true} scrollEnabled={false} overScrollMode="never" bounces={false} />
                             ) : (
                                 <ActivityIndicator size="large" color="#2563eb" style={{ flex: 1 }} />
                             )}

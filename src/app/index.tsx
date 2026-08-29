@@ -1,18 +1,17 @@
 import { Redirect } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ActivityIndicator, View } from 'react-native';
+import { useAuth } from './context/AuthContext';
 
 export default function Index() {
-    const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+    const { user, isLoading } = useAuth();
 
-    useEffect(() => {
-        AsyncStorage.getItem('userId').then(id => {
-            setIsLoggedIn(!!id);
-        });
-    }, []);
+    if (isLoading) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', backgroundColor: '#f8fafc' }}>
+                <ActivityIndicator size="large" color="#2563eb" />
+            </View>
+        );
+    }
 
-    if (isLoggedIn === null) return <View style={{flex: 1, justifyContent: 'center'}}><ActivityIndicator size="large" /></View>;
-
-    return isLoggedIn ? <Redirect href="/(tabs)/home" /> : <Redirect href="/login" />;
+    return user.id ? <Redirect href="/(tabs)/home" /> : <Redirect href="/perfil" />;
 }
