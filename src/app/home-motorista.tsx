@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BotoesAcaoMotorista } from '../components/BotoesAcaoMotorista';
 import { CardsTurmasMotorista } from '../components/CardsTurmasMotorista';
@@ -37,7 +37,6 @@ export default function HomeMotorista() {
     );
 
     async function carregarDadosSilencioso() {
-
         if (primeiraCarga.current) {
             setLoading(true);
         }
@@ -61,10 +60,8 @@ export default function HomeMotorista() {
             setTurmas(data);
             
             if (data.length > 0) {
-
                 const atual = turmaSelecionada ? (data.find((t: any) => t.id === turmaSelecionada.id) || data[0]) : data[0];
                 
-
                 if (!turmaSelecionada || turmaSelecionada.id !== atual.id) {
                     setTurmaSelecionada(atual);
                 }
@@ -106,10 +103,73 @@ export default function HomeMotorista() {
         setModalVisible(true);
         setCarregandoAlunos(true);
         try {
-            const res = await fetch(`${API_URL}/usuarios/passageiros/sem-turma`, { headers: { 'Bypass-Tunnel-Reminder': 'true' } });
-            if (res.ok) setTodosAlunos(await res.json());
-        } catch (e) { Alert.alert("Erro", "Não foi possível carregar alunos livres."); }
-        finally { setCarregandoAlunos(false); }
+            const res = await fetch(`${API_URL}/usuarios/passageiros`, { headers: { 'Bypass-Tunnel-Reminder': 'true' } });
+            if (res.ok) {
+                const todosOsPassageiros = await res.json();
+                const idsNaTurma = new Set(passageiros.map(p => p.id));
+                const disponiveis = todosOsPassageiros.filter((p: any) => !idsNaTurma.has(p.id));
+                setTodosAlunos(disponiveis);
+            }
+        } catch (e) { 
+            Alert.alert("Erro", "Não foi possível carregar alunos livres."); 
+        } finally { 
+            setCarregandoAlunos(false); 
+        }
+    }
+
+    async function vincularAluno(alunoId: number) {
+        if (!turmaSelecionada) return;
+        try {
+            const res = await fetch(`${API_URL}/turmas/${turmaSelecionada.id}/alunos/${alunoId}`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Bypass-Tunnel-Reminder': 'true' 
+                }
+            });
+            
+            if (res.ok) {
+                setModalVisible(false);
+                await buscarPassageirosPorTurma(turmaSelecionada.id);
+            } else {
+                const erroTexto = await res.text();
+                Alert.alert("Erro", erroTexto || "Não foi possível vincular o aluno.");
+            }
+        } catch (e) {
+            Alert.alert("Erro", "Falha de conexão com o servidor.");
+        }
+    }
+
+    async function removerAluno(alunoId: number, nomeAluno: string) {
+        if (!turmaSelecionada) return;
+        
+        Alert.alert(
+            "Remover Passageiro",
+            `Deseja realmente remover ${nomeAluno} desta turma?`,
+            [
+                { text: "Cancelar", style: "cancel" },
+                { 
+                    text: "Remover", 
+                    style: "destructive", 
+                    onPress: async () => {
+                        try {
+                            const res = await fetch(`${API_URL}/turmas/${turmaSelecionada.id}/alunos/${alunoId}`, {
+                                method: 'DELETE',
+                                headers: { 'Bypass-Tunnel-Reminder': 'true' }
+                            });
+                            
+                            if (res.ok) {
+                                await buscarPassageirosPorTurma(turmaSelecionada.id);
+                            } else {
+                                Alert.alert("Erro", "Não foi possível remover o aluno.");
+                            }
+                        } catch (e) {
+                            Alert.alert("Erro", "Falha de conexão com o servidor.");
+                        }
+                    }
+                }
+            ]
+        );
     }
 
     const totalPassageiros = passageiros.length;
@@ -133,13 +193,11 @@ export default function HomeMotorista() {
                     throw new Error(err.erro); 
                 }
 
-
                 router.push(`/mapa?sentido=${sentido.toLowerCase()}`);
             } catch (e: any) { 
                 Alert.alert("Erro", e.message || "Erro ao iniciar a rota."); 
             }
         };
-
 
         if (!todosResponderam) {
             Alert.alert(
@@ -215,21 +273,113 @@ export default function HomeMotorista() {
                         <Text style={styles.emptyText}>Nenhum aluno vinculado.</Text>
                     ) : (
                         passageiros.map(p => (
-                            <View key={p.id} style={styles.listItem}>
-                                <View>
+                            <View key={p.id} style={[styles.listItem, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+                                <View style={{ flex: 1 }}>
                                     <Text style={styles.nameText}>{p.nome}</Text>
                                     <Text style={styles.subText}>{p.status ? 'Respondeu' : 'Aguardando...'}</Text>
                                 </View>
-                                <View style={[styles.badge, { backgroundColor: p.status ? '#dcfce7' : '#fee2e2' }]}>
-                                    <Text style={{ color: p.status ? '#065f46' : '#991b1b', fontSize: 12, fontWeight: 'bold' }}>
-                                        {p.status || 'PENDENTE'}
-                                    </Text>
+                                
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <View style={[styles.badge, { backgroundColor: p.status ? '#dcfce7' : '#fee2e2' }]}>
+                                        <Text style={{ color: p.status ? '#065f46' : '#991b1b', fontSize: 12, fontWeight: 'bold' }}>
+                                            {p.status || 'PENDENTE'}
+                                        </Text>
+                                    </View>
+
+                                    <TouchableOpacity onPress={() => removerAluno(p.id, p.nome)} style={{ padding: 6 }}>
+                                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                                    </TouchableOpacity>
                                 </View>
                             </View>
                         ))
                     )}
                 </View>
             </ScrollView>
+
+            <Modal visible={modalVisible} animationType="fade" transparent={true} onRequestClose={() => setModalVisible(false)}>
+                <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+                    <TouchableOpacity 
+                        style={{ flex: 1 }} 
+                        activeOpacity={1} 
+                        onPress={() => setModalVisible(false)} 
+                    />
+                    <View style={{ 
+                        backgroundColor: '#ffffff', 
+                        borderTopLeftRadius: 28, 
+                        borderTopRightRadius: 28, 
+                        paddingHorizontal: 24,
+                        paddingTop: 16,
+                        paddingBottom: 40, 
+                        maxHeight: '75%',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: -4 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 12,
+                        elevation: 10
+                    }}>
+                        <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#cbd5e1', marginBottom: 16 }} />
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <View>
+                                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#0f172a' }}>Adicionar Passageiro</Text>
+                                <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>Selecione um aluno para vincular à turma</Text>
+                            </View>
+                            <TouchableOpacity 
+                                onPress={() => setModalVisible(false)}
+                                style={{ backgroundColor: '#eff6ff', padding: 8, borderRadius: 20 }}
+                            >
+                                <Ionicons name="close" size={20} color="#2563eb" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {carregandoAlunos ? (
+                            <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                                <ActivityIndicator size="large" color="#64748b" />
+                            </View>
+                        ) : todosAlunos.length === 0 ? (
+                            <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                                <Ionicons name="people-outline" size={48} color="#cbd5e1" style={{ marginBottom: 12 }} />
+                                <Text style={{ textAlign: 'center', color: '#64748b', fontSize: 15, fontWeight: '500' }}>Nenhum aluno disponível sem turma.</Text>
+                            </View>
+                        ) : (
+                            <ScrollView showsVerticalScrollIndicator={false}>
+                                {todosAlunos.map(aluno => (
+                                    <TouchableOpacity 
+                                        key={aluno.id} 
+                                        style={{ 
+                                            flexDirection: 'row', 
+                                            justifyContent: 'space-between', 
+                                            alignItems: 'center', 
+                                            paddingVertical: 12,
+                                            paddingHorizontal: 12,
+                                            borderRadius: 8,
+                                            marginBottom: 8,
+                                            backgroundColor: '#f8fafc',
+                                            borderWidth: 1,
+                                            borderColor: '#e2e8f0'
+                                        }}
+                                        onPress={() => vincularAluno(aluno.id)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                                                <Ionicons name="person" size={16} color="#64748b" />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontSize: 16, fontWeight: '600', color: '#1e293b' }}>{aluno.nome}</Text>
+                                                {aluno.telefone ? <Text style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>{aluno.telefone}</Text> : null}
+                                            </View>
+                                        </View>
+                                        <View style={{ backgroundColor: '#eff6ff', padding: 6, borderRadius: 16 }}>
+                                            <Ionicons name="add" size={18} color="#2563eb" />
+                                        </View>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        )}
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
