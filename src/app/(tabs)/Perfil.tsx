@@ -5,7 +5,7 @@ import { ActivityIndicator, Alert, Linking, Modal, ScrollView, StatusBar, Text, 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_URL } from '../../config/config';
 import { perfilStyles as styles } from '../../constants/perfilStyles';
-import { useAuth } from '.././context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Perfil() {
     const { user, signOut } = useAuth();

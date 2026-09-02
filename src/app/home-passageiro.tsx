@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { CardTurmaPassageiro } from '../components/CardTurmaPassageiro';
+import ConfirmadosAvatares from '../components/ConfirmadosAvatares'; // Importando o componente de avatares que criamos
 import { SeletorPresenca } from '../components/SeletorPresenca';
 import { API_URL } from '../config/config';
 import { homePassageiroStyles as styles } from '../constants/homePassageiroStyles';
@@ -26,15 +27,16 @@ export default function HomePassageiro() {
     const [statusViagem, setStatusViagem] = useState('INATIVA');
     const [statusGps, setStatusGps] = useState('GARAGEM');
     const [turma, setTurma] = useState(null);
+    
+    // Estado para guardar a lista filtrada de passageiros que confirmaram presença
+    const [passageirosConfirmados, setPassageirosConfirmados] = useState<{ nome: string; iniciais: string }[]>([]);
 
-    // Dispara o carregamento assim que o ID do usuário chega pelo AuthContext
     useEffect(() => {
         if (user?.id) {
             carregarDados();
         }
     }, [user?.id]);
 
-    // Recarrega os dados sempre que a tela ganha foco
     useFocusEffect(
         useCallback(() => { 
             if (user?.id) {
@@ -80,8 +82,32 @@ export default function HomePassageiro() {
                 
                 if (resStatus.ok) {
                     const list = await resStatus.json();
+                    
+                    // Identifica o status do usuário logado
                     const meuRegistro = list.find((p: any) => String(p.id || p.usuarioId || p.passageiroId) === String(user.id));
                     setStatusConfirmado(meuRegistro?.status || meuRegistro?.presenca || '');
+
+                    // Filtra apenas os passageiros que confirmaram presença (ex: status ativo ou diferente de vazio/não vai)
+                    // Ajuste a regra de filtro abaixo conforme o retorno exato do seu backend para "confirmado"
+                    const confirmados = list
+                        .filter((p: any) => {
+                            const st = (p.status || p.presenca || '').toUpperCase();
+                            return st === 'IDA' || st === 'VOLTA' || st === 'AMBOS' || st === 'CONFIRMADO';
+                        })
+                        .map((p: any) => {
+                            const nomeCompleto = p.nome || p.usuarioNome || 'Passageiro';
+                            const partes = nomeCompleto.trim().split(' ');
+                            const iniciais = partes.length > 1 
+                                ? `${partes[0][0]}${partes[partes.length - 1][0]}` 
+                                : partes[0].substring(0, 2);
+                            
+                            return {
+                                nome: nomeCompleto,
+                                iniciais: iniciais.toUpperCase()
+                            };
+                        });
+
+                    setPassageirosConfirmados(confirmados);
                 }
                 
                 if (resTurma.ok) setTurma(await resTurma.json());
@@ -111,6 +137,9 @@ export default function HomePassageiro() {
             });
             
             if (!resposta.ok) {
+                carregarDados();
+            } else {
+                // Recarrega os dados para atualizar a lista de avatares confirmados em tempo real
                 carregarDados();
             }
         } catch (e) { 
@@ -166,7 +195,13 @@ export default function HomePassageiro() {
                             )}
                         </View>
 
+                        <View style={{ marginBottom: 15, backgroundColor: '#ffffff', padding: 15, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e293b', marginBottom: 10 }}>Colegas na Rota Hoje</Text>
+                            <ConfirmadosAvatares passageiros={passageirosConfirmados} />
+                        </View>
+
                         <SeletorPresenca statusConfirmado={statusConfirmado} onRegistrar={registrarPresenca} />
+
                     </>
                 )}
             </ScrollView>
